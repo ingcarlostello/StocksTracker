@@ -2,23 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository layout: two separate git repos
+## Repository layout: one git repo, app in a subfolder
 
 ```
-StockTracker/              ← outer repo, branch main (1 commit: "configuracion inicial del proyecto")
+StockTracker/              ← the only git repo (remote: github.com/ingcarlostello/StocksTracker)
+├── .gitignore             ← root-only: /node_modules/, .DS_Store
+├── package.json           ← only next-devtools-mcp (MCP server), not the app
 ├── .claude/rules/         ← architecture + UI reference rules (auto-loaded)
 ├── .mcp.json              ← next-devtools MCP server
 ├── docs/design/           ← UI mockup (ui-reference.jpg)
-└── stocks_investments/    ← SEPARATE git repo, holds the entire app
+└── stocks_investments/    ← the entire Next.js app (plain folder, own .gitignore)
 ```
 
-`stocks_investments/` has its own `.git` and its own history (`b237804 Initial commit from Create Next App`). The outer repo's commit records `stocks_investments/` as a **gitlink** (mode `160000`, embedded repository) and also tracks its own `node_modules/` (only `next-devtools-mcp`) because it has no `.gitignore`. Git hygiene is the user's call; do not "fix" it.
+Until 2026-09-12 `stocks_investments/` was a separate embedded repo recorded as a gitlink, so its code never reached GitHub. It is now versioned as normal files of the root repo (commit `e2f4b85`); the old inner history (2 commits) is kept outside the repo at `../stocks_investments-git-backup`. There must be no `stocks_investments/.git` again: `git add` on a folder containing one records a gitlink instead of files.
 
 Consequences:
 
-- All application code, `package.json`, and `node_modules/` live in `stocks_investments/`. **Run every npm command from there**, not from the repo root.
-- Committing app changes means committing in `stocks_investments/`. Staging that directory from the outer repo would record it as an embedded repository / gitlink, not as files.
-- Confirm which repo you are in before any git operation: `git rev-parse --show-toplevel`.
+- All application code, its `package.json`, and its `node_modules/` live in `stocks_investments/`. **Run every npm command from there**, not from the repo root (the root `package.json` only exists for the MCP server).
+- `stocks_investments/.gitignore` keeps ignoring the app's `node_modules`, `.next`, `.env*` (except `.env.example`) and `next-env.d.ts`; the root `.gitignore` only covers root-level files.
+- Turbopack's root is pinned to the app folder in `next.config.ts`, because the repo root also contains a `package-lock.json`.
 
 ## Commands
 
@@ -62,10 +64,10 @@ A concrete example already in the codebase: [app/layout.tsx](stocks_investments/
 
 ### Next.js MCP server (`next-devtools`)
 
-[.mcp.json](.mcp.json) at the **outer** root registers `next-devtools-mcp`, as described in `01-app/02-guides/mcp.md`. It lives outside the app repo because Claude Code runs from `StockTracker/`; Claude Code also picks it up when launched from `stocks_investments/`. Like any `.mcp.json` server, it loads only after a one-time approval in an interactive `claude` session (folder trust + server approval).
+[.mcp.json](.mcp.json) at the **repository** root registers `next-devtools-mcp`, as described in `01-app/02-guides/mcp.md`. It lives outside the app folder because Claude Code runs from `StockTracker/`; Claude Code also picks it up when launched from `stocks_investments/`. Like any `.mcp.json` server, it loads only after a one-time approval in an interactive `claude` session (folder trust + server approval).
 
 - `nextjs_index` / `nextjs_call` need `npm run dev` running in `stocks_investments/`; discovery probes ports 3000–3010. `get_errors` and `get_page_metadata` only report on pages open in a browser.
-- `nextjs_docs` defaults `project_path` to the MCP process's working directory — the outer root, where `next` is not installed — and falsely answers `upgrade_required`. Always pass `project_path: "stocks_investments"`.
+- `nextjs_docs` defaults `project_path` to the MCP process's working directory — the repository root, where `next` is not installed — and falsely answers `upgrade_required`. Always pass `project_path: "stocks_investments"`.
 
 ### Tailwind v4 is CSS-first
 
