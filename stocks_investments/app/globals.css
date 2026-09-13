@@ -1,26 +1,59 @@
 @import "tailwindcss";
 
+/*
+ * InvestTrack design tokens, measured from docs/design/ui-reference.jpg.
+ * The design is dark-only, so there is no light/prefers-color-scheme variant.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+
+  --background: #091016;
+  --surface: #101920;
+  --surface-raised: #151e27;
+  --border: #1d242b;
+  --border-input: #2c353c;
+
+  --foreground: #fafcff;
+  --muted: #9aa4ae;
+
+  --primary: #4adb8d;
+  --primary-foreground: #002e05;
+  --accent-tint: #0d2f2d;
+  --accent-outline: #0c2425;
+  --logo: #3ae5b3;
+
+  --positive: #55bd89;
+  --negative: #e0676a;
+  --buy-tint: #0d2322;
+  --sell-tint: #2a1c1d;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-border-input: var(--border-input);
+
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-outline: var(--accent-outline);
+  --color-logo: var(--logo);
+
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-buy-tint: var(--buy-tint);
+  --color-sell-tint: var(--sell-tint);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
