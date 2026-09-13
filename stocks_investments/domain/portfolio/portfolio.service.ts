@@ -38,8 +38,12 @@ function priceFor(prices: PriceMap, ticker: string): number | null {
 }
 
 // Closed positions (no shares left) are not holdings.
+export function openPositions(positions: readonly Position[]): Position[] {
+  return positions.filter(isOpen);
+}
+
 export function buildHoldings(positions: readonly Position[], prices: PriceMap): Holding[] {
-  return positions.filter(isOpen).map((position) => {
+  return openPositions(positions).map((position) => {
     const price = priceFor(prices, position.ticker);
     return {
       ticker: position.ticker,

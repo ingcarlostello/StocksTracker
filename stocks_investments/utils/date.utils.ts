@@ -24,6 +24,11 @@ export function dayIndex(isoDate: string): number {
   return Math.round(date.getTime() / MS_PER_DAY);
 }
 
+// Midnight UTC of the ISO date, in epoch ms.
+export function epochMsFromIsoDate(isoDate: string): number {
+  return dayIndex(isoDate) * MS_PER_DAY;
+}
+
 export function isoDateFromDayIndex(index: number): string {
   return new Date(index * MS_PER_DAY).toISOString().slice(0, 10);
 }

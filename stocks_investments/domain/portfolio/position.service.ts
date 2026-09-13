@@ -3,7 +3,7 @@ import { calculateTotalAmount } from "../transactions/transaction-validation.ser
 import type { SellSequenceResult, TransactionLike } from "../transactions/transaction.type";
 import { SHARES_EPSILON } from "./portfolio.constants";
 import { OversellError } from "./position.errors";
-import type { Position } from "./portfolio.type";
+import type { Position, PositionsResult } from "./portfolio.type";
 
 type AppliedTransaction = Pick<TransactionLike, "id" | "ticker" | "type" | "date" | "quantity" | "price">;
 
@@ -86,13 +86,18 @@ export function buildPositions(transactions: readonly TransactionLike[]): Positi
   return [...positions.values()].sort((a, b) => (a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0));
 }
 
-// Non-throwing check of a whole history, for mutations and forms.
-export function validateSellSequence(transactions: readonly TransactionLike[]): SellSequenceResult {
+// Non-throwing replay for callers that must render an invalid history instead of crashing.
+export function tryBuildPositions(transactions: readonly TransactionLike[]): PositionsResult {
   try {
-    buildPositions(transactions);
-    return { ok: true };
+    return { ok: true, positions: buildPositions(transactions) };
   } catch (error) {
     if (error instanceof OversellError) return { ok: false, violation: error.violation };
     throw error;
   }
+}
+
+// Non-throwing check of a whole history, for mutations and forms.
+export function validateSellSequence(transactions: readonly TransactionLike[]): SellSequenceResult {
+  const result = tryBuildPositions(transactions);
+  return result.ok ? { ok: true } : result;
 }
