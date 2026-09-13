@@ -35,12 +35,14 @@ Run from `stocks_investments/`:
 | `npm run typecheck` | `next typegen && tsc --noEmit` — typegen first, so the global `LayoutProps`/`PageProps` types exist |
 | `npx convex dev` | Convex dev loop: codegen + push functions, watches `convex/` (needs `.env.local`) |
 | `npx convex dev --once` | Single codegen + push, no watch — use it to verify a phase |
+| `npm test` | Vitest, single run (`vitest run`) |
+| `npm run test:watch` | Vitest in watch mode |
 
-**There is no test setup yet.** Vitest (node environment, pure-TS tests only) is scheduled for Phase 4 of the phased plan; until it lands, do not assume a runner exists.
+**Tests:** Vitest 5 with `environment: "node"` ([vitest.config.mts](stocks_investments/vitest.config.mts)), for pure TypeScript only — no jsdom or React Testing Library. Tests are colocated as `*.test.ts` and only picked up under `domain/`, `adapters/` and `utils/`; the `@/*` alias resolves through Vite 8's native `resolve.tsconfigPaths`. Vitest 5 requires `vite` as a non-optional peer (hence the explicit `vite` devDependency) and `@types/node` ≥ 22 (matches the Node 22 runtime). Do not downgrade to Vitest 4: with Vite 8 installed, npm 10.9's arborist crashes (`Cannot read properties of null (reading 'edgesOut')`) because Vite 8's optional devtools peers request `vitest@*`.
 
 ## Stack
 
-Next.js 16.3.5, React 19.2.8, TypeScript 5 (`strict`), Tailwind CSS v4, ESLint 9, Convex 1.45, TanStack Query 5.102.
+Next.js 16.3.5, React 19.2.8, TypeScript 5 (`strict`), Tailwind CSS v4, ESLint 9, Convex 1.45, TanStack Query 5.102, Vitest 5.
 
 ### Convex
 
@@ -94,14 +96,15 @@ The image deliberately lives outside `stocks_investments/public/`: it is a desig
 
 ## Current state and phased plan
 
-Work follows the user's phased spec ("Investment Portfolio Tracker — Desarrollo por fases", 15 phases): implement → verify (`lint`, `typecheck`, `build`, tests once they exist) → report → stop if decisions are pending. Never implement a later phase's functionality early. The approved Phase 0 architecture (folder tree, Convex schema, data flows, Modified Dietz / average-cost methodology, phase-by-phase deliverables) is saved in the user's Claude plans directory; confirmed decisions: Massive free plan (grouped daily endpoint, end-of-day closes), average cost for sells, Total Gain/Loss = unrealized only, Vitest from Phase 4.
+Work follows the user's phased spec ("Investment Portfolio Tracker — Desarrollo por fases", 15 phases): implement → verify (`lint`, `typecheck`, `build`, `npm test`) → report → stop if decisions are pending. Never implement a later phase's functionality early. The approved Phase 0 architecture (folder tree, Convex schema, data flows, Modified Dietz / average-cost methodology, phase-by-phase deliverables) is saved in the user's Claude plans directory; confirmed decisions: Massive free plan (grouped daily endpoint, end-of-day closes), average cost for sells, Total Gain/Loss = unrealized only, Vitest from Phase 4.
 
 Progress:
 
 - **Phase 1 (setup) done** — Convex + TanStack installed and wired through `app/providers.tsx`.
 - **Phase 2 (folder structure) done** — `app/page.tsx` redirects to `/dashboard`; placeholder pages for `/dashboard`, `/portfolio`, `/transactions`, `/performance` (header only, `metadata` title template `"%s | InvestTrack"`). The mockup's app shell lives in `components/layout/` (`AppShell` server component, `NavBar` client component because of `usePathname`, `PageHeader`, `AppLogo`; nav items in `navigation.constants.ts`, icons from `lucide-react`). Route paths are in `constants/routes.constants.ts`; active-route matching is `utils/route.utils.ts` + `hooks/use-active-route.hook.ts`. Mockup palette tokens are in `app/globals.css` (dark only; use classes like `bg-surface`, `text-muted`, `border-border`, `text-primary`). Empty layer folders (`adapters/market-data/`, `services/market-data/`, `features/`, `components/ui/`, `types/`) hold a `.gitkeep`; delete it when the first real file lands. Scaffold SVGs and `public/` were removed.
 - **Phase 3 (Convex DB) done** — `convex/schema.ts` defines `transactions` (indexes `by_date`, `by_ticker_date`) and exports the field validators reused by `convex/transactions.ts` (`list`, `listByTicker`, `create`, `update`, `remove`, all with `args`/`returns`). Mutations validate through `domain/transactions/transaction-validation.service.ts` (ticker normalized to uppercase SIP, valid non-future `YYYY-MM-DD` date with "today" in New York, quantity/price finite > 0), compute `totalAmount` unrounded, and throw `ConvexError({ code: "VALIDATION", issues })` or `{ code: "NOT_FOUND", id }` (codes in `transaction.constants.ts`, payload type `TransactionErrorData`). `update` never touches `createdAt`. Canonical order `(date, createdAt, id)` is `transaction-order.service.ts`; `toTransactionLike` maps a stored doc to the domain shape and keeps the id type via a generic. Oversell checks are not in yet (Phase 5).
-- Not yet: portfolio engine and Vitest (Phase 4), services, adapters, market data, UI features, responsive layout and UI states (Phase 13).
+- **Phase 4 (portfolio engine) done** — `domain/portfolio/`: `position.service.ts` (`buildPositions` replays each ticker in canonical order via `applyTransaction`; BUY adds shares and cost, SELL still throws until Phase 5), `portfolio.service.ts` (`totalShares`, `totalInvested`, `averageCost`, `currentValue`, `gainLoss`, `returnPercentage`, `buildHoldings`, `summarizePortfolio`), types `Position`/`Holding`/`PortfolioSummary`/`PriceMap`, `SHARES_EPSILON`. Returns are ratios (0.3333), never pre-multiplied percentages. Positions at or below `SHARES_EPSILON` are not holdings. A missing ticker in `PriceMap` leaves that holding's price fields `null`, and `summarizePortfolio` then returns `portfolioValue`/`totalGainLoss`/`portfolioReturn` as `null` with `missingPriceTickers`. Float noise at break-even (e.g. `-5.7e-14`) is expected: future `utils/format-*` must use `signDisplay: "exceptZero"` and choose green/red from the rounded value.
+- Not yet: sell logic (Phase 5), services, adapters, market data, UI features, responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`
 
