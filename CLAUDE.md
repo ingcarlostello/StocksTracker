@@ -38,7 +38,7 @@ Run from `stocks_investments/`:
 | `npm test` | Vitest, single run (`vitest run`) |
 | `npm run test:watch` | Vitest in watch mode |
 
-**Tests:** Vitest 5 with `environment: "node"` ([vitest.config.mts](stocks_investments/vitest.config.mts)), for pure TypeScript only — no jsdom or React Testing Library. Tests are colocated as `*.test.ts` and only picked up under `domain/`, `adapters/` and `utils/`; the `@/*` alias resolves through Vite 8's native `resolve.tsconfigPaths`. Vitest 5 requires `vite` as a non-optional peer (hence the explicit `vite` devDependency) and `@types/node` ≥ 22 (matches the Node 22 runtime). Do not downgrade to Vitest 4: with Vite 8 installed, npm 10.9's arborist crashes (`Cannot read properties of null (reading 'edgesOut')`) because Vite 8's optional devtools peers request `vitest@*`.
+**Tests:** Vitest 5 with `environment: "node"` ([vitest.config.mts](stocks_investments/vitest.config.mts)), for pure TypeScript only — no jsdom or React Testing Library. Tests are colocated as `*.test.ts` and only picked up under `domain/`, `adapters/`, `services/` and `utils/`; the `@/*` alias resolves through Vite 8's native `resolve.tsconfigPaths`. Vitest 5 requires `vite` as a non-optional peer (hence the explicit `vite` devDependency) and `@types/node` ≥ 22 (matches the Node 22 runtime). Do not downgrade to Vitest 4: with Vite 8 installed, npm 10.9's arborist crashes (`Cannot read properties of null (reading 'edgesOut')`) because Vite 8's optional devtools peers request `vitest@*`.
 
 ## Stack
 
@@ -70,6 +70,14 @@ A concrete example already in the codebase: [app/layout.tsx](stocks_investments/
 
 - `nextjs_index` / `nextjs_call` need `npm run dev` running in `stocks_investments/`; discovery probes ports 3000–3010. `get_errors` and `get_page_metadata` only report on pages open in a browser.
 - `nextjs_docs` defaults `project_path` to the MCP process's working directory — the repository root, where `next` is not installed — and falsely answers `upgrade_required`. Always pass `project_path: "stocks_investments"`.
+
+### Massive MCP server (`massive`)
+
+Also in [.mcp.json](.mcp.json): Massive's remote server (`type: http`, `https://mcp.massive.com/`), added per https://massive.com/docs/ai-tools/clients/claude-code. It authenticates with OAuth (`/mcp` → `massive` → Authenticate), so the config holds no secret, and its access mirrors the account's plan (free Basic). Use it only to explore endpoints and check live response shapes while developing; the app itself calls Massive from the server with `MASSIVE_API_KEY` (Phase 6), never through MCP.
+
+### Playwright MCP server (`playwright`)
+
+Also in [.mcp.json](.mcp.json): `@playwright/mcp` (`npx -y @playwright/mcp@latest`), per https://playwright.dev/docs/getting-started-mcp. It drives a real browser through accessibility snapshots, which makes it useful for checking UI flows against `npm run dev` (http://localhost:3000). It needs Node ≥ 20 and runs headed by default. Add `--headless`, `--browser=…` or `--isolated` to its `args` if needed. It is a development tool only: it is not a dependency of the app and does not replace Vitest.
 
 ### Tailwind v4 is CSS-first
 
@@ -109,7 +117,15 @@ Progress:
   - On a rejected **create**, `transactionId` is the id of the rolled-back document; build error messages (Phase 8) from `ticker`, `date`, `available` and `requested`.
   - Form pre-validation (Phase 8) must not invent a client `createdAt` for the candidate: same-day order is by server `createdAt`, so place a new candidate after existing same-day trades; an edit (Phase 9) keeps the stored `id` and `createdAt`.
   - The fixed 1e-9 tolerance can misjudge sell-all orders on fractional positions above roughly 1.7M shares (float64 resolution). Accepted as out of range for a personal tracker.
-- Not yet: services, adapters, market data (Phase 6), UI features, responsive layout and UI states (Phase 13).
+- **Phase 6 (Massive) done** — `GET /api/prices?symbols=AAPL,MSFT` ([route.ts](stocks_investments/app/api/prices/route.ts)) → `getMarketDataService()` (`services/market-data/market-data.server.ts`, `server-only`, wires the key from `lib/env.server.ts`) → `createMarketDataService` (pure and unit-tested with fakes) → `MassiveMarketDataProvider` (`adapters/market-data/`) plus the Convex cache adapter `ConvexDailyCloseCache` (`adapters/convex/`, calls `convex/dailyCloses.ts` through `fetchQuery`/`fetchMutation`). "Current price" = close of the newest of up to 3 weekdays strictly before today in New York (`domain/market-data/trading-date.service.ts`). A date whose closes are all cached costs no Massive request. Otherwise one grouped-daily request is made and every requested ticker is stored write-once (`null` = no bar that day). Dates with no market data are remembered in memory per server process, not persisted. Response `PricesResponse` (`types/prices-response.type.ts`); errors `ApiErrorResponse` with 400 `INVALID_SYMBOLS`, 429 `RATE_LIMITED` + `Retry-After: 60`, 503 `PRICES_UNAVAILABLE`, 500 `CONFIGURATION_ERROR`, 502 `UPSTREAM_ERROR`, 500 `INTERNAL_ERROR`; always `Cache-Control: no-store`. Vitest now also includes `services/**`. `dailyCloses` functions are public like `transactions` (single-user, no auth; revisit in Phase 15).
+- **Massive behavior verified live on 2026-09-13** (free Stocks Basic plan, not in their docs):
+  - Grouped daily is ~1.4 MB and ~12.5k bars. Bars have keys `T`, `c`, `o`, `h`, `l`, `v`, `vw`, `n`, `t`; `t` is 16:00 New York.
+  - Tickers use SIP format (`BRK.B`). Preferreds look like `WFCpL` and do not pass `TICKER_REGEX`.
+  - Weekend or holiday: 200, `status: "OK"`, `resultsCount: 0`, and **no `results` key**.
+  - Today before end of day, and dates beyond the ~2-year entitlement: both 403 `NOT_AUTHORIZED`; only the `message` text tells them apart.
+  - Bad or missing key: 401 with `error`. Malformed date: 400.
+  - Over 5 requests/min: 429 with `error` and **no `Retry-After`** header.
+- Not yet: UI features, responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`
 

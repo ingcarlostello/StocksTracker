@@ -2,7 +2,21 @@
   "mcpServers": {
     "next-devtools": {
       "command": "npx",
-      "args": ["-y", "next-devtools-mcp@latest"]
+      "args": [
+        "-y",
+        "next-devtools-mcp@latest"
+      ]
+    },
+    "massive": {
+      "type": "http",
+      "url": "https://mcp.massive.com/"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }

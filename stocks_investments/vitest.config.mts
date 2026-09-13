@@ -6,6 +6,11 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["domain/**/*.test.ts", "adapters/**/*.test.ts", "utils/**/*.test.ts"],
+    include: [
+      "domain/**/*.test.ts",
+      "adapters/**/*.test.ts",
+      "services/**/*.test.ts",
+      "utils/**/*.test.ts",
+    ],
   },
 });
