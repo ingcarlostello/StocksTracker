@@ -1,8 +1,10 @@
 export type Position = {
   ticker: string;
   shares: number;
-  // Cost of the shares still held.
+  // Cost of the shares still held (average cost method).
   costBasis: number;
+  // Sum of sale proceeds minus the cost basis removed by each SELL.
+  realizedGain: number;
 };
 
 // Latest price per ticker; a missing key means no price is available.
