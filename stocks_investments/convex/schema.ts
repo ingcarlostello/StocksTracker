@@ -19,8 +19,20 @@ export const transactionFields = {
   createdAt: v.number(),
 };
 
+// null = the day's market data was fetched and this ticker had no bar (delisted or unknown).
+export const dailyCloseValueValidator = v.union(v.number(), v.null());
+
 export default defineSchema({
   transactions: defineTable(transactionFields)
     .index("by_date", ["date"])
     .index("by_ticker_date", ["ticker", "date"]),
+
+  // Write-once cache of end-of-day closes; a published close never changes.
+  dailyCloses: defineTable({
+    ticker: v.string(),
+    // Actual trading day "YYYY-MM-DD".
+    date: v.string(),
+    close: dailyCloseValueValidator,
+    fetchedAt: v.number(),
+  }).index("by_date_ticker", ["date", "ticker"]),
 });
