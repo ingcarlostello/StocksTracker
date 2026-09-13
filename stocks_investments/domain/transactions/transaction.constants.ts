@@ -9,4 +9,5 @@ export const MARKET_TIME_ZONE = "America/New_York";
 export const TRANSACTION_ERROR_CODES = {
   VALIDATION: "VALIDATION",
   NOT_FOUND: "NOT_FOUND",
+  OVERSELL: "OVERSELL",
 } as const;

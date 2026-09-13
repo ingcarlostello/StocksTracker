@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import { transactionFields, transactionInputFields } from "./schema";
 import {
   calculateTotalAmount,
@@ -14,6 +14,8 @@ import type {
   TransactionErrorData,
   TransactionInput,
 } from "../domain/transactions/transaction.type";
+import { toTransactionLike } from "../domain/transactions/transaction.utils";
+import { validateSellSequence } from "../domain/portfolio/position.service";
 import { todayIsoInTimeZone } from "../utils/date.utils";
 
 const transactionDocValidator = v.object({
@@ -30,6 +32,16 @@ function validateOrFail(input: TransactionInput): TransactionInput {
   const result = validateTransactionInput(input, todayIsoInTimeZone(MARKET_TIME_ZONE, Date.now()));
   if (!result.ok) fail({ code: TRANSACTION_ERROR_CODES.VALIDATION, issues: result.issues });
   return result.value;
+}
+
+// Runs after the write: throwing makes Convex discard every write of the mutation.
+async function assertNoOversell(ctx: MutationCtx, ticker: string): Promise<void> {
+  const history = await ctx.db
+    .query("transactions")
+    .withIndex("by_ticker_date", (q) => q.eq("ticker", ticker))
+    .collect();
+  const result = validateSellSequence(history.map(toTransactionLike));
+  if (!result.ok) fail({ code: TRANSACTION_ERROR_CODES.OVERSELL, ...result.violation });
 }
 
 export const list = query({
@@ -56,11 +68,14 @@ export const create = mutation({
   returns: v.id("transactions"),
   handler: async (ctx, args) => {
     const input = validateOrFail(args);
-    return await ctx.db.insert("transactions", {
+    const id = await ctx.db.insert("transactions", {
       ...input,
       totalAmount: calculateTotalAmount(input.quantity, input.price),
       createdAt: Date.now(),
     });
+    // A new BUY only adds shares, so it cannot create an oversell.
+    if (input.type === "SELL") await assertNoOversell(ctx, input.ticker);
+    return id;
   },
 });
 
@@ -75,6 +90,8 @@ export const update = mutation({
       ...input,
       totalAmount: calculateTotalAmount(input.quantity, input.price),
     });
+    await assertNoOversell(ctx, input.ticker);
+    if (existing.ticker !== input.ticker) await assertNoOversell(ctx, existing.ticker);
     return null;
   },
 });
@@ -86,6 +103,8 @@ export const remove = mutation({
     const existing = await ctx.db.get("transactions", id);
     if (!existing) fail({ code: TRANSACTION_ERROR_CODES.NOT_FOUND, id });
     await ctx.db.delete("transactions", id);
+    // Removing a SELL only adds back shares, so it cannot create an oversell.
+    if (existing.type === "BUY") await assertNoOversell(ctx, existing.ticker);
     return null;
   },
 });

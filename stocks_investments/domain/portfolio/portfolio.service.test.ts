@@ -12,7 +12,7 @@ import {
   totalShares,
 } from "./portfolio.service";
 
-const aapl: Position = { ticker: "AAPL", shares: 2, costBasis: 300 };
+const aapl: Position = { ticker: "AAPL", shares: 2, costBasis: 300, realizedGain: 0 };
 
 describe("position metrics (spec example: 2 shares, 300 invested, price 200)", () => {
   it("totalShares is 2", () => expect(totalShares(aapl)).toBe(2));
@@ -26,11 +26,11 @@ describe("position metrics (spec example: 2 shares, 300 invested, price 200)", (
 });
 
 describe("position metric edge cases", () => {
-  const closed: Position = { ticker: "AAPL", shares: 0, costBasis: 0 };
+  const closed: Position = { ticker: "AAPL", shares: 0, costBasis: 0, realizedGain: 0 };
 
   it("averageCost is null for a closed position", () => {
     expect(averageCost(closed)).toBeNull();
-    expect(averageCost({ ticker: "AAPL", shares: SHARES_EPSILON, costBasis: 0 })).toBeNull();
+    expect(averageCost({ ticker: "AAPL", shares: SHARES_EPSILON, costBasis: 0, realizedGain: 0 })).toBeNull();
   });
 
   it("returnPercentage is null when nothing is invested", () => {
@@ -72,15 +72,15 @@ describe("buildHoldings", () => {
   });
 
   it("does not read inherited object keys as prices", () => {
-    const [holding] = buildHoldings([{ ticker: "constructor", shares: 1, costBasis: 1 }], {});
+    const [holding] = buildHoldings([{ ticker: "constructor", shares: 1, costBasis: 1, realizedGain: 0 }], {});
     expect(holding.currentPrice).toBeNull();
   });
 
   it("excludes positions with no shares left", () => {
     const positions: Position[] = [
       aapl,
-      { ticker: "MSFT", shares: 0, costBasis: 0 },
-      { ticker: "TSLA", shares: SHARES_EPSILON, costBasis: 0 },
+      { ticker: "MSFT", shares: 0, costBasis: 0, realizedGain: 0 },
+      { ticker: "TSLA", shares: SHARES_EPSILON, costBasis: 0, realizedGain: 0 },
     ];
     expect(buildHoldings(positions, { AAPL: 200, MSFT: 300, TSLA: 250 }).map((h) => h.ticker)).toEqual([
       "AAPL",
@@ -88,14 +88,14 @@ describe("buildHoldings", () => {
   });
 
   it("keeps a small real fractional holding", () => {
-    const [holding] = buildHoldings([{ ticker: "VOO", shares: 0.001, costBasis: 0.41 }], { VOO: 410 });
+    const [holding] = buildHoldings([{ ticker: "VOO", shares: 0.001, costBasis: 0.41, realizedGain: 0 }], { VOO: 410 });
     expect(holding.ticker).toBe("VOO");
     expect(holding.averageCost).toBeCloseTo(410, 9);
   });
 });
 
 describe("summarizePortfolio", () => {
-  const positions: Position[] = [aapl, { ticker: "MSFT", shares: 3, costBasis: 180 }];
+  const positions: Position[] = [aapl, { ticker: "MSFT", shares: 3, costBasis: 180, realizedGain: 0 }];
 
   it("totals reconcile with the holding rows", () => {
     const holdings = buildHoldings(positions, { AAPL: 200, MSFT: 50 });

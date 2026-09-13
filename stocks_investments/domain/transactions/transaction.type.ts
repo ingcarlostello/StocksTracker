@@ -7,7 +7,19 @@ export type TransactionErrorCode =
 
 export type TransactionErrorData =
   | { code: typeof TRANSACTION_ERROR_CODES.VALIDATION; issues: ValidationIssue[] }
-  | { code: typeof TRANSACTION_ERROR_CODES.NOT_FOUND; id: string };
+  | { code: typeof TRANSACTION_ERROR_CODES.NOT_FOUND; id: string }
+  | ({ code: typeof TRANSACTION_ERROR_CODES.OVERSELL } & OversellViolation);
+
+// First SELL in canonical order that needs more shares than were held at that point.
+export type OversellViolation = {
+  ticker: string;
+  date: string;
+  transactionId: string;
+  available: number;
+  requested: number;
+};
+
+export type SellSequenceResult = { ok: true } | { ok: false; violation: OversellViolation };
 
 export type TransactionInput = {
   ticker: string;
