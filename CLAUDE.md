@@ -14,7 +14,7 @@ StockTracker/              ← the only git repo (remote: github.com/ingcarloste
 └── stocks_investments/    ← the entire Next.js app (plain folder, own .gitignore)
 ```
 
-Until 2026-09-12 `stocks_investments/` was a separate embedded repo recorded as a gitlink, so its code never reached GitHub. It is now versioned as normal files of the root repo (commit `e2f4b85`); the old inner history (2 commits) is kept outside the repo at `../stocks_investments-git-backup`. There must be no `stocks_investments/.git` again: `git add` on a folder containing one records a gitlink instead of files.
+Until 2026-09-12 `stocks_investments/` was a separate embedded repo recorded as a gitlink, so its code never reached GitHub. It is now versioned as normal files of the root repo (commit `e2f4b85`); its old inner history (2 commits) was verified identical and then discarded. There must be no `stocks_investments/.git` again: `git add` on a folder containing one records a gitlink instead of files.
 
 Consequences:
 
@@ -71,7 +71,7 @@ A concrete example already in the codebase: [app/layout.tsx](stocks_investments/
 
 ### Tailwind v4 is CSS-first
 
-There is no `tailwind.config.js`. Theme tokens are declared with `@theme inline` inside [app/globals.css](stocks_investments/app/globals.css), which also holds the `:root` light/dark custom properties. PostCSS wires it via the `@tailwindcss/postcss` plugin. Add or change design tokens in that CSS file, not in a JS config.
+There is no `tailwind.config.js`. Theme tokens are declared with `@theme inline` inside [app/globals.css](stocks_investments/app/globals.css), which also holds the `:root` custom properties (dark theme only, values from the mockup). PostCSS wires it via the `@tailwindcss/postcss` plugin. Add or change design tokens in that CSS file, not in a JS config.
 
 ### Import alias
 
@@ -84,7 +84,7 @@ There is no `tailwind.config.js`. Theme tokens are declared with `@theme inline`
 Two points where that document and the current repo do not yet line up:
 
 - It shows a reference tree rooted at `src/`. This project has no `src/` and the `@/*` alias points at the package root, so place those layers at the `stocks_investments/` root (`services/`, `hooks/`, `adapters/`, …) or under `features/<domain>/`.
-- None of those layers exist yet. The structure is prescriptive, to be created as features land — not an existing tree to match.
+- Phase 2 created the top-level layer folders (most still empty with a `.gitkeep`). Files inside them are created as features land — follow the approved plan, not an existing tree.
 
 ## UI reference is mandatory
 
@@ -96,7 +96,11 @@ The image deliberately lives outside `stocks_investments/public/`: it is a desig
 
 Work follows the user's phased spec ("Investment Portfolio Tracker — Desarrollo por fases", 15 phases): implement → verify (`lint`, `typecheck`, `build`, tests once they exist) → report → stop if decisions are pending. Never implement a later phase's functionality early. The approved Phase 0 architecture (folder tree, Convex schema, data flows, Modified Dietz / average-cost methodology, phase-by-phase deliverables) is saved in the user's Claude plans directory; confirmed decisions: Massive free plan (grouped daily endpoint, end-of-day closes), average cost for sells, Total Gain/Loss = unrealized only, Vitest from Phase 4.
 
-Progress: **Phase 1 (setup) done** — Convex + TanStack installed and wired through `app/providers.tsx`, `convex/schema.ts` is an empty `defineSchema({})`, metadata is "InvestTrack". `app/page.tsx` and `app/globals.css` are still the scaffold defaults (replaced in Phase 2). No domain code, services, adapters or market-data integration exist yet.
+Progress:
+
+- **Phase 1 (setup) done** — Convex + TanStack installed and wired through `app/providers.tsx`; `convex/schema.ts` is an empty `defineSchema({})`.
+- **Phase 2 (folder structure) done** — `app/page.tsx` redirects to `/dashboard`; placeholder pages for `/dashboard`, `/portfolio`, `/transactions`, `/performance` (header only, `metadata` title template `"%s | InvestTrack"`). The mockup's app shell lives in `components/layout/` (`AppShell` server component, `NavBar` client component because of `usePathname`, `PageHeader`, `AppLogo`; nav items in `navigation.constants.ts`, icons from `lucide-react`). Route paths are in `constants/routes.constants.ts`; active-route matching is `utils/route.utils.ts` + `hooks/use-active-route.hook.ts`. Mockup palette tokens are in `app/globals.css` (dark only; use classes like `bg-surface`, `text-muted`, `border-border`, `text-primary`). Empty layer folders (`domain/`, `adapters/market-data/`, `services/market-data/`, `features/`, `components/ui/`, `types/`) hold a `.gitkeep`; delete it when the first real file lands. Scaffold SVGs and `public/` were removed.
+- Not yet: domain code, Convex tables, services, adapters, market data, responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`
 
