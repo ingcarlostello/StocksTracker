@@ -6,6 +6,7 @@ import {
   buildHoldings,
   currentValue,
   gainLoss,
+  openPositions,
   returnPercentage,
   summarizePortfolio,
   totalInvested,
@@ -91,6 +92,17 @@ describe("buildHoldings", () => {
     const [holding] = buildHoldings([{ ticker: "VOO", shares: 0.001, costBasis: 0.41, realizedGain: 0 }], { VOO: 410 });
     expect(holding.ticker).toBe("VOO");
     expect(holding.averageCost).toBeCloseTo(410, 9);
+  });
+});
+
+describe("openPositions", () => {
+  it("keeps only positions with shares left, in input order", () => {
+    const positions: Position[] = [
+      { ticker: "MSFT", shares: 3, costBasis: 180, realizedGain: 0 },
+      { ticker: "TSLA", shares: 0, costBasis: 0, realizedGain: 50 },
+      aapl,
+    ];
+    expect(openPositions(positions).map((p) => p.ticker)).toEqual(["MSFT", "AAPL"]);
   });
 });
 

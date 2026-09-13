@@ -38,7 +38,7 @@ Run from `stocks_investments/`:
 | `npm test` | Vitest, single run (`vitest run`) |
 | `npm run test:watch` | Vitest in watch mode |
 
-**Tests:** Vitest 5 with `environment: "node"` ([vitest.config.mts](stocks_investments/vitest.config.mts)), for pure TypeScript only — no jsdom or React Testing Library. Tests are colocated as `*.test.ts` and only picked up under `domain/`, `adapters/`, `services/` and `utils/`; the `@/*` alias resolves through Vite 8's native `resolve.tsconfigPaths`. Vitest 5 requires `vite` as a non-optional peer (hence the explicit `vite` devDependency) and `@types/node` ≥ 22 (matches the Node 22 runtime). Do not downgrade to Vitest 4: with Vite 8 installed, npm 10.9's arborist crashes (`Cannot read properties of null (reading 'edgesOut')`) because Vite 8's optional devtools peers request `vitest@*`.
+**Tests:** Vitest 5 with `environment: "node"` ([vitest.config.mts](stocks_investments/vitest.config.mts)), for pure TypeScript only — no jsdom or React Testing Library. Tests are colocated as `*.test.ts` and only picked up under `domain/`, `adapters/`, `features/`, `services/` and `utils/`; the `@/*` alias resolves through Vite 8's native `resolve.tsconfigPaths`. Vitest 5 requires `vite` as a non-optional peer (hence the explicit `vite` devDependency) and `@types/node` ≥ 22 (matches the Node 22 runtime). Do not downgrade to Vitest 4: with Vite 8 installed, npm 10.9's arborist crashes (`Cannot read properties of null (reading 'edgesOut')`) because Vite 8's optional devtools peers request `vitest@*`.
 
 ## Stack
 
@@ -125,7 +125,16 @@ Progress:
   - Today before end of day, and dates beyond the ~2-year entitlement: both 403 `NOT_AUTHORIZED`; only the `message` text tells them apart.
   - Bad or missing key: 401 with `error`. Malformed date: 400.
   - Over 5 requests/min: 429 with `error` and **no `Retry-After`** header.
-- Not yet: UI features, responsive layout and UI states (Phase 13).
+- **Phase 7 (prices + TanStack) done** — data flow for every priced screen:
+  - `useTransactions` (`features/transactions/hooks/`): Convex `useQuery(api.transactions.list)`, sorted canonically; `undefined` while loading.
+  - `usePortfolio` (`features/portfolio/hooks/`): `tryBuildPositions` (non-throwing), then `openPositions` tickers, then `usePrices`, then `buildHoldings`/`summarizePortfolio`. Returns `PortfolioState`: `loading` | `invalid-history` (with the `OversellViolation`) | `ready`.
+  - `usePrices` (`features/market-data/hooks/`): `useQuery(currentPricesQueryOptions(symbols))`. The cache contract lives in `features/market-data/prices.service.ts` (`fetchPrices`, `priceKeys`). Key = sorted unique symbols; disabled with no symbols; `staleTime` 5 min; `retry`, `refetchOnWindowFocus` and `refetchOnReconnect` off; `placeholderData: keepPreviousData`; the `AbortSignal` is deliberately not passed to `fetch`.
+  - After a 429, `canRefresh` stays false until `Retry-After` (default 60 s). Only the Refresh button is gated; mounts and new symbol sets still fetch.
+  - Errors reach the UI as English messages from `prices-messages.constants.ts`.
+  - Formatters: `utils/number-format.utils.ts` (`formatCurrency`, `formatSignedCurrency`, `formatShares`, `formatSignedPercent`; signed ones use `exceptZero`) and `utils/date-format.utils.ts` (`formatIsoDate` in UTC, returning non-ISO input unchanged; `formatDateTime` as "Nov 15, 2024 10:24 AM"). Locale and decimals are in `constants/format.constants.ts`; `API_ENDPOINTS` and `API_ERROR_CODES` in `constants/api.constants.ts` (`ApiErrorCode` derives from it).
+  - `/portfolio` renders the minimal `PortfolioView` (`PriceStatus` + `HoldingsPreview`), which the Phase 10 `HoldingsTable`/`PortfolioTotals` replace.
+  - Verified in a real browser with the Playwright MCP: 1 request on open, none on focus or reconnect, 1 per Refresh, reactive Convex updates, 429 cooldown, invalid history, empty state. The MCP writes to `/.playwright-mcp/`, which is git-ignored.
+- Not yet: transaction form (Phase 8), transactions table (Phase 9), full portfolio/dashboard/performance screens, responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`
 

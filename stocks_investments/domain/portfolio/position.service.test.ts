@@ -6,6 +6,7 @@ import {
   buildPositions,
   emptyPosition,
   sellCostBasis,
+  tryBuildPositions,
   validateSellSequence,
 } from "./position.service";
 import { SHARES_EPSILON } from "./portfolio.constants";
@@ -214,6 +215,25 @@ describe("buildPositions with SELL (average cost)", () => {
     expect(() => buildPositions([tx("BUY", "MSFT", 5, 100), tx("SELL", "AAPL", 1, 100)])).toThrow(
       OversellError,
     );
+  });
+});
+
+describe("tryBuildPositions", () => {
+  it("returns the positions for a valid history", () => {
+    const tx = makeFactory();
+    expect(tryBuildPositions([tx("BUY", "AAPL", 2, 100)])).toEqual({
+      ok: true,
+      positions: [{ ticker: "AAPL", shares: 2, costBasis: 200, realizedGain: 0 }],
+    });
+  });
+
+  it("returns the violation instead of throwing for an invalid history", () => {
+    const tx = makeFactory();
+    const sell = tx("SELL", "AAPL", 1, 100);
+    expect(tryBuildPositions([sell])).toEqual({
+      ok: false,
+      violation: { ticker: "AAPL", date: sell.date, transactionId: sell.id, available: 0, requested: 1 },
+    });
   });
 });
 

@@ -2,5 +2,8 @@
 # The app in stocks_investments/ has its own .gitignore for node_modules, .next, .env*, etc.
 /node_modules/
 
+# Snapshots, console logs and screenshots written by the Playwright MCP server.
+/.playwright-mcp/
+
 # macOS
 .DS_Store

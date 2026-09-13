@@ -1,3 +1,5 @@
+import type { OversellViolation } from "../transactions/transaction.type";
+
 export type Position = {
   ticker: string;
   shares: number;
@@ -6,6 +8,10 @@ export type Position = {
   // Sum of sale proceeds minus the cost basis removed by each SELL.
   realizedGain: number;
 };
+
+export type PositionsResult =
+  | { ok: true; positions: Position[] }
+  | { ok: false; violation: OversellViolation };
 
 // Latest price per ticker; a missing key means no price is available.
 export type PriceMap = Readonly<Record<string, number>>;
