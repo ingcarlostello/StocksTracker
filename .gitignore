@@ -1,0 +1,6 @@
+# Root-level only: dependencies installed for the next-devtools MCP server (see package.json).
+# The app in stocks_investments/ has its own .gitignore for node_modules, .next, .env*, etc.
+/node_modules/
+
+# macOS
+.DS_Store
