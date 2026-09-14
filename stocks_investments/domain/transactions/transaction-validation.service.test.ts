@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TransactionInput } from "./transaction.type";
 import {
+  calculateQuantityFromAmount,
   calculateTotalAmount,
   normalizeTicker,
   validateTransactionInput,
@@ -80,5 +81,21 @@ describe("validateTransactionInput", () => {
 describe("calculateTotalAmount", () => {
   it("multiplies quantity by price without rounding", () => {
     expect(calculateTotalAmount(1.5, 100.25)).toBe(150.375);
+  });
+});
+
+describe("calculateQuantityFromAmount", () => {
+  it("user example: $75 at $200 per share → 0.375 shares", () => {
+    expect(calculateQuantityFromAmount(75, 200)).toBe(0.375);
+  });
+
+  it.each([
+    [100, 333],
+    [75, 210.37],
+    [0.01, 500000],
+    [1000000, 0.0001],
+  ])("round-trips $%s at $%s back to the same amount within a millionth of a cent", (amount, price) => {
+    const quantity = calculateQuantityFromAmount(amount, price);
+    expect(Math.abs(calculateTotalAmount(quantity, price) - amount)).toBeLessThan(1e-8);
   });
 });

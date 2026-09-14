@@ -2,6 +2,7 @@ export const ROUTES = {
   DASHBOARD: "/dashboard",
   PORTFOLIO: "/portfolio",
   TRANSACTIONS: "/transactions",
+  ADD_TRANSACTION: "/transactions/new",
   PERFORMANCE: "/performance",
 } as const;
 

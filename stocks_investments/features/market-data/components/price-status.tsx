@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { formatDateTime, formatIsoDate } from "@/utils/date-format.utils";
 
 type PriceStatusProps = {
@@ -32,15 +33,10 @@ export function PriceStatus({
               ? `Close of ${formatIsoDate(asOfDate)}${lastUpdatedAt ? ` · updated ${formatDateTime(lastUpdatedAt)}` : ""}`
               : "Prices not loaded"}
         </p>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={!canRefresh}
-          className="inline-flex items-center gap-2 rounded-md border border-primary/60 bg-accent-outline px-3 py-1.5 text-sm font-medium text-primary transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        <Button variant="outline-accent" onClick={onRefresh} disabled={!canRefresh}>
           <RefreshCw aria-hidden="true" className={`size-4 ${isFetching ? "animate-spin" : ""}`} strokeWidth={1.75} />
           Refresh Prices
-        </button>
+        </Button>
       </div>
       {errorMessage ? (
         <p role="alert" className="text-sm text-negative">

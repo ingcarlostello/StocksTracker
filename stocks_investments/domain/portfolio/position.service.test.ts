@@ -5,11 +5,12 @@ import {
   applyTransaction,
   buildPositions,
   emptyPosition,
+  findCandidateOversell,
   sellCostBasis,
   tryBuildPositions,
   validateSellSequence,
 } from "./position.service";
-import { SHARES_EPSILON } from "./portfolio.constants";
+import { CANDIDATE_TRANSACTION_ID, SHARES_EPSILON } from "./portfolio.constants";
 
 function makeFactory() {
   let sequence = 0;
@@ -215,6 +216,63 @@ describe("buildPositions with SELL (average cost)", () => {
     expect(() => buildPositions([tx("BUY", "MSFT", 5, 100), tx("SELL", "AAPL", 1, 100)])).toThrow(
       OversellError,
     );
+  });
+});
+
+describe("findCandidateOversell", () => {
+  const input = (type: TransactionType, quantity: number, date = "2025-03-01", ticker = "AAPL") => ({
+    ticker,
+    type,
+    date,
+    quantity,
+    price: 100,
+  });
+
+  it("never flags a BUY", () => {
+    expect(findCandidateOversell([], input("BUY", 5))).toBeNull();
+  });
+
+  it("allows a SELL covered by earlier buys", () => {
+    const tx = makeFactory();
+    expect(findCandidateOversell([tx("BUY", "AAPL", 10, 100, "2025-01-01")], input("SELL", 10))).toBeNull();
+  });
+
+  it("flags a SELL larger than the shares held on its date", () => {
+    const tx = makeFactory();
+    const violation = findCandidateOversell([tx("BUY", "AAPL", 3, 100, "2025-01-01")], input("SELL", 4));
+    expect(violation).toEqual({
+      ticker: "AAPL",
+      date: "2025-03-01",
+      transactionId: CANDIDATE_TRANSACTION_ID,
+      available: 3,
+      requested: 4,
+    });
+  });
+
+  it("flags a SELL dated before the buy that would fund it", () => {
+    const tx = makeFactory();
+    expect(findCandidateOversell([tx("BUY", "AAPL", 10, 100, "2025-06-01")], input("SELL", 1, "2025-03-01"))).not.toBeNull();
+  });
+
+  it("places the candidate after stored trades on the same day, like the server", () => {
+    const tx = makeFactory();
+    const sameDayBuy = { ...tx("BUY", "AAPL", 5, 100, "2025-03-01"), createdAt: 9_000_000_000_000 };
+    expect(findCandidateOversell([sameDayBuy], input("SELL", 5, "2025-03-01"))).toBeNull();
+  });
+
+  it("ignores other tickers", () => {
+    const tx = makeFactory();
+    expect(findCandidateOversell([tx("BUY", "MSFT", 10, 100, "2025-01-01")], input("SELL", 1))).not.toBeNull();
+  });
+
+  it("reports a later stored SELL that the new SELL would leave uncovered", () => {
+    const tx = makeFactory();
+    const laterSell = tx("SELL", "AAPL", 6, 100, "2025-05-01");
+    const violation = findCandidateOversell(
+      [tx("BUY", "AAPL", 10, 100, "2025-01-01"), laterSell],
+      input("SELL", 5, "2025-03-01"),
+    );
+    expect(violation).toMatchObject({ transactionId: laterSell.id, available: 5, requested: 6 });
   });
 });
 

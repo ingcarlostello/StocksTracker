@@ -1,7 +1,12 @@
 import { sortTransactions } from "../transactions/transaction-order.service";
 import { calculateTotalAmount } from "../transactions/transaction-validation.service";
-import type { SellSequenceResult, TransactionLike } from "../transactions/transaction.type";
-import { SHARES_EPSILON } from "./portfolio.constants";
+import type {
+  OversellViolation,
+  SellSequenceResult,
+  TransactionInput,
+  TransactionLike,
+} from "../transactions/transaction.type";
+import { CANDIDATE_TRANSACTION_ID, SHARES_EPSILON } from "./portfolio.constants";
 import { OversellError } from "./position.errors";
 import type { Position, PositionsResult } from "./portfolio.type";
 
@@ -100,4 +105,22 @@ export function tryBuildPositions(transactions: readonly TransactionLike[]): Pos
 export function validateSellSequence(transactions: readonly TransactionLike[]): SellSequenceResult {
   const result = tryBuildPositions(transactions);
   return result.ok ? { ok: true } : result;
+}
+
+// Client pre-check for a transaction about to be created, mirroring the server: only a SELL can oversell,
+// and the server stamps createdAt at insert time, so the candidate sorts after every stored same-day trade.
+export function findCandidateOversell(
+  history: readonly TransactionLike[],
+  candidate: TransactionInput,
+): OversellViolation | null {
+  if (candidate.type !== "SELL") return null;
+  const tickerHistory = history.filter((transaction) => transaction.ticker === candidate.ticker);
+  const candidateTransaction: TransactionLike = {
+    ...candidate,
+    id: CANDIDATE_TRANSACTION_ID,
+    totalAmount: calculateTotalAmount(candidate.quantity, candidate.price),
+    createdAt: Number.MAX_SAFE_INTEGER,
+  };
+  const result = validateSellSequence([...tickerHistory, candidateTransaction]);
+  return result.ok ? null : result.violation;
 }

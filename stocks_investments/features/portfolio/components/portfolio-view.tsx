@@ -2,7 +2,7 @@
 
 import { PriceStatus } from "@/features/market-data/components/price-status";
 import { formatIsoDate } from "@/utils/date-format.utils";
-import { formatShares } from "@/utils/number-format.utils";
+import { formatSharesExact } from "@/utils/number-format.utils";
 import { usePortfolio } from "../hooks/use-portfolio.hook";
 import { HoldingsPreview } from "./holdings-preview";
 
@@ -17,8 +17,8 @@ export function PortfolioView() {
     const { ticker, date, available, requested } = state.violation;
     return (
       <p role="alert" className="rounded-lg border border-negative/40 bg-sell-tint p-4 text-sm text-foreground">
-        Your history sells {formatShares(requested)} {ticker} on {formatIsoDate(date)}, but only{" "}
-        {formatShares(available)} shares were held then. Fix that transaction to see your portfolio.
+        Your history sells {formatSharesExact(requested)} {ticker} on {formatIsoDate(date)}, but only{" "}
+        {formatSharesExact(available)} shares were held then. Fix that transaction to see your portfolio.
       </p>
     );
   }
