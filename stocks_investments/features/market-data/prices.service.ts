@@ -2,12 +2,9 @@ import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { API_ENDPOINTS, API_ERROR_CODES } from "@/constants/api.constants";
 import type { ApiErrorResponse } from "@/types/api-error.type";
 import type { PricesResponse } from "@/types/prices-response.type";
+import { isRecord } from "@/utils/type-guard.utils";
 import { PRICES_STALE_TIME_MS } from "./prices.constants";
 import { PricesApiError } from "./prices.errors";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isPricesResponse(body: unknown): body is PricesResponse {
   if (!isRecord(body)) return false;

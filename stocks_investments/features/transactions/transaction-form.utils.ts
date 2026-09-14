@@ -1,0 +1,105 @@
+import { CANDIDATE_TRANSACTION_ID } from "@/domain/portfolio/portfolio.constants";
+import {
+  calculateQuantityFromAmount,
+  calculateTotalAmount,
+  validateTransactionInput,
+} from "@/domain/transactions/transaction-validation.service";
+import type { OversellViolation, TransactionLike, ValidationIssue } from "@/domain/transactions/transaction.type";
+import { formatIsoDate } from "@/utils/date-format.utils";
+import { formatFixedDecimal, formatSharesExact, formatTrimmedDecimal } from "@/utils/number-format.utils";
+import { parseDecimalInput } from "@/utils/number-parse.utils";
+import { DERIVED_AMOUNT_DECIMALS, DERIVED_SHARES_DECIMALS } from "./transaction-form.constants";
+import { TRANSACTION_FORM_MESSAGES, TRANSACTION_VALIDATION_MESSAGES } from "./transaction-messages.constants";
+import type {
+  PositionSizeDisplay,
+  PositionSizeField,
+  TransactionFieldErrors,
+  TransactionFormValues,
+  TransactionInputResult,
+} from "./transaction-form.type";
+
+function isPositiveNumber(value: number): boolean {
+  return Number.isFinite(value) && value > 0;
+}
+
+// Exact share count for the form: typed shares, or amount ÷ price (NaN when it cannot be computed yet).
+function quantityFromForm(values: TransactionFormValues): number {
+  const size = parseDecimalInput(values.sizeText);
+  if (values.sizeField === "quantity") return size;
+  const price = parseDecimalInput(values.price);
+  return isPositiveNumber(size) && isPositiveNumber(price) ? calculateQuantityFromAmount(size, price) : Number.NaN;
+}
+
+// The input the user did not edit shows a calculated value, or stays empty until price and the other value are valid.
+export function positionSizeDisplay(values: TransactionFormValues): PositionSizeDisplay {
+  if (values.sizeField === "quantity") {
+    const quantity = parseDecimalInput(values.sizeText);
+    const price = parseDecimalInput(values.price);
+    const amount =
+      isPositiveNumber(quantity) && isPositiveNumber(price) ? calculateTotalAmount(quantity, price) : Number.NaN;
+    return {
+      quantity: values.sizeText,
+      amount: isPositiveNumber(amount) ? formatFixedDecimal(amount, DERIVED_AMOUNT_DECIMALS) : "",
+    };
+  }
+
+  const quantity = quantityFromForm(values);
+  return {
+    quantity: isPositiveNumber(quantity) ? formatTrimmedDecimal(quantity, DERIVED_SHARES_DECIMALS) : "",
+    amount: values.sizeText,
+  };
+}
+
+// Server and domain issues speak about `quantity`; when the user typed an amount, show it on that input.
+export function fieldErrorsFromIssues(
+  issues: readonly ValidationIssue[],
+  sizeField: PositionSizeField = "quantity",
+): TransactionFieldErrors {
+  const errors: TransactionFieldErrors = {};
+  for (const { field, code } of issues) {
+    errors[field] ??= TRANSACTION_VALIDATION_MESSAGES[code];
+  }
+  if (sizeField === "amount" && errors.quantity) {
+    delete errors.quantity;
+    errors.amount = TRANSACTION_FORM_MESSAGES.INVALID_AMOUNT;
+  }
+  return errors;
+}
+
+// Same domain validation the server runs, so the form reports problems before a round trip.
+export function buildTransactionInput(values: TransactionFormValues, today: string): TransactionInputResult {
+  const result = validateTransactionInput(
+    {
+      ticker: values.ticker,
+      type: values.type,
+      date: values.date,
+      quantity: quantityFromForm(values),
+      price: parseDecimalInput(values.price),
+    },
+    today,
+  );
+  if (result.ok) return { ok: true, input: result.value };
+
+  const fieldErrors = fieldErrorsFromIssues(result.issues, values.sizeField);
+  // A valid amount only fails because the price is missing or invalid; flag the price alone.
+  if (values.sizeField === "amount" && fieldErrors.price && isPositiveNumber(parseDecimalInput(values.sizeText))) {
+    delete fieldErrors.amount;
+  }
+  return { ok: false, fieldErrors };
+}
+
+// The failing SELL is the new one unless it is a transaction already in the stored history
+// (the server reports the id of its rolled-back insert, which the client never saw).
+export function isNewTransactionViolation(violation: OversellViolation, history: readonly TransactionLike[] | undefined): boolean {
+  if (violation.transactionId === CANDIDATE_TRANSACTION_ID) return true;
+  return !(history ?? []).some((transaction) => transaction.id === violation.transactionId);
+}
+
+export function oversellMessage(violation: OversellViolation, isNewTransaction: boolean): string {
+  const requested = formatSharesExact(violation.requested);
+  const available = formatSharesExact(violation.available);
+  const date = formatIsoDate(violation.date);
+  return isNewTransaction
+    ? `Selling ${requested} ${violation.ticker} on ${date} needs more shares than the ${available} held at that point.`
+    : `This would leave your saved sale of ${requested} ${violation.ticker} on ${date} without enough shares: only ${available} would be held then.`;
+}

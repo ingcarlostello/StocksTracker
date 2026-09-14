@@ -1,5 +1,7 @@
 export const TRANSACTION_TYPES = ["BUY", "SELL"] as const;
 
+export const TRANSACTION_FIELDS = ["ticker", "type", "date", "quantity", "price"] as const;
+
 // SIP format: 1–6 letters with an optional share-class suffix (e.g. "BRK.B").
 export const TICKER_REGEX = /^[A-Z]{1,6}(\.[A-Z]{1,2})?$/;
 

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   formatCurrency,
+  formatFixedDecimal,
   formatShares,
+  formatSharesExact,
   formatSignedCurrency,
   formatSignedPercent,
+  formatTrimmedDecimal,
 } from "./number-format.utils";
 
 describe("formatCurrency", () => {
@@ -35,6 +38,48 @@ describe("formatShares", () => {
     [1234.56789, "1,234.5679"],
   ])("%s → %s", (value, expected) => {
     expect(formatShares(value)).toBe(expected);
+  });
+});
+
+describe("formatSharesExact", () => {
+  it.each([
+    [10, "10.0000"],
+    [0.123456, "0.123456"],
+    [0.12346, "0.12346"],
+    [1234.5, "1,234.5000"],
+  ])("%s → %s", (value, expected) => {
+    expect(formatSharesExact(value)).toBe(expected);
+  });
+});
+
+describe("formatFixedDecimal", () => {
+  it.each([
+    [2000, 2, "2000.00"],
+    [75.125, 2, "75.13"],
+    [1234567.891, 2, "1234567.89"],
+    [1e21, 2, "1000000000000000000000.00"],
+  ])("%s with %i decimals → %s", (value, decimals, expected) => {
+    expect(formatFixedDecimal(value, decimals)).toBe(expected);
+  });
+
+  it.each([0.5 * 2.01, 3.5 * 200.15, 3 * 33.335, 1 * 1.005, 5.7 * 14.45])(
+    "rounds %s exactly like formatCurrency",
+    (value) => {
+      expect(`$${formatFixedDecimal(value, 2)}`).toBe(formatCurrency(value));
+    },
+  );
+});
+
+describe("formatTrimmedDecimal", () => {
+  it.each([
+    [0.375, 6, "0.375"],
+    [100 / 333, 6, "0.3003"],
+    [12, 6, "12"],
+    [10.5, 6, "10.5"],
+    [0.0000001, 6, "0"],
+    [1500, 6, "1500"],
+  ])("%s with up to %i decimals → %s", (value, decimals, expected) => {
+    expect(formatTrimmedDecimal(value, decimals)).toBe(expected);
   });
 });
 

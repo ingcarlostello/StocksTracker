@@ -134,7 +134,25 @@ Progress:
   - Formatters: `utils/number-format.utils.ts` (`formatCurrency`, `formatSignedCurrency`, `formatShares`, `formatSignedPercent`; signed ones use `exceptZero`) and `utils/date-format.utils.ts` (`formatIsoDate` in UTC, returning non-ISO input unchanged; `formatDateTime` as "Nov 15, 2024 10:24 AM"). Locale and decimals are in `constants/format.constants.ts`; `API_ENDPOINTS` and `API_ERROR_CODES` in `constants/api.constants.ts` (`ApiErrorCode` derives from it).
   - `/portfolio` renders the minimal `PortfolioView` (`PriceStatus` + `HoldingsPreview`), which the Phase 10 `HoldingsTable`/`PortfolioTotals` replace.
   - Verified in a real browser with the Playwright MCP: 1 request on open, none on focus or reconnect, 1 per Refresh, reactive Convex updates, 429 cooldown, invalid history, empty state. The MCP writes to `/.playwright-mcp/`, which is git-ignored.
-- Not yet: transaction form (Phase 8), transactions table (Phase 9), full portfolio/dashboard/performance screens, responsive layout and UI states (Phase 13).
+- **Phase 8 (transaction form) done** — `/transactions` has a "+ Add Transaction" `ButtonLink` to `/transactions/new` (`ROUTES.ADD_TRANSACTION`; the nav keeps Transactions active).
+  - The page mounts `AddTransactionView`. It renders `TransactionForm` only after `useIsClient()` (`hooks/use-is-client.hook.ts`), because the default and max date come from the viewer's clock. Rendering it on the server hydrate-mismatched and could show one date while submitting another.
+  - **Amount field (user request, 2026-09-13):** the form has "Price per share (USD)", "Amount (USD)" and "Shares"; the label deviates from the mockup's "Price (USD)" on purpose.
+    - Amount and Shares are synchronized through the price. `TransactionFormValues` stores only the driver (`sizeField` + `sizeText`), and `positionSizeDisplay` calculates the other input with a "Calculated from …" hint: amount at 2 decimals, shares at up to 9, so a copied share count closes a position within `SHARES_EPSILON`.
+    - When the amount drives, the submitted quantity is the unrounded `calculateQuantityFromAmount(amount, price)` (domain), so the stored `totalAmount` equals the typed amount. Quantity validation errors are shown on Amount.
+    - Plain input text uses the Intl-based `formatFixedDecimal`/`formatTrimmedDecimal`, so it rounds exactly like `formatCurrency`.
+    - Convex still receives `{ quantity, price }`; no schema change.
+  - `useTransactionForm` keeps raw strings (the ticker is shown uppercase via CSS, so the caret never jumps). On submit it runs `buildTransactionInput`: `parseDecimalInput` (strict plain decimals) plus the same `validateTransactionInput` the server uses. It then checks `findCandidateOversell` against the live Convex history (the candidate sorts after same-day trades, with no invented `createdAt`), then calls `useTransactionMutations().createTransaction`.
+  - Server `ConvexError`s map through `toTransactionMutationError`: field errors, oversell text via `oversellMessage(violation, isNewTransactionViolation(...))`, which names a saved sale when that is the one left short, or a generic message. The button stays disabled after a successful create until navigation, to prevent duplicates.
+  - New shared UI in `components/ui/`: `Button`/`ButtonLink` (variants `primary`, `secondary`, `outline-accent`), `Card`, `TextField` (label, `aria-invalid`/`aria-describedby`, trailing icon), `SegmentedToggle` (native radios, keyboard-accessible). New utils: `formatSharesExact`, `isRecord` (`utils/type-guard.utils.ts`).
+  - Browser-verified with Playwright, including a server-side FUTURE_DATE via a shifted browser clock. The Convex client itself logs server-rejected mutations to the console; that noise is expected.
+  - Deferred to Phase 13 (a11y polish): move focus to the first invalid field after a failed submit, avoid focus dropping to `body` while the submit button is disabled, and announce the calculated Amount/Shares value to screen readers (e.g. a polite live region).
+- **Next: multiple portfolios (user request, 2026-09-13), a new phase inserted between Phase 8 and Phase 9.** Named portfolios ("Viajes", "Retiro", …), each with its own transactions and positions. It goes first because Phases 9–12 all depend on the portfolio scope. Agreed design points:
+  - A `portfolios` table plus a `portfolioId` on every transaction.
+  - Average cost and oversell checks are per (portfolio, ticker).
+  - A combined view sums per-portfolio positions; it never replays all transactions together.
+  - Prices and `dailyCloses` stay shared.
+  - Before implementing, update the Phase 0 plan (Phases 9–12) and ask the user about: an "All portfolios" view, deleting a portfolio that has transactions, how the active portfolio is chosen in the UI, and moving shares between portfolios.
+- Not yet: transactions table with edit/delete (Phase 9), full portfolio/dashboard/performance screens, responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`
 

@@ -53,3 +53,8 @@ export function validateTransactionInput(
 export function calculateTotalAmount(quantity: number, price: number): number {
   return quantity * price;
 }
+
+// Inverse of calculateTotalAmount for a trade entered as money; unrounded so the stored total matches the amount.
+export function calculateQuantityFromAmount(amount: number, price: number): number {
+  return amount / price;
+}
