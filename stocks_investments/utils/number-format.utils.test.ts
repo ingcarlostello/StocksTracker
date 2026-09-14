@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { parseDecimalInput } from "./number-parse.utils";
 import {
   formatCurrency,
+  formatExactDecimal,
   formatFixedDecimal,
   formatShares,
   formatSharesExact,
@@ -80,6 +82,71 @@ describe("formatTrimmedDecimal", () => {
     [1500, 6, "1500"],
   ])("%s with up to %i decimals → %s", (value, decimals, expected) => {
     expect(formatTrimmedDecimal(value, decimals)).toBe(expected);
+  });
+});
+
+// Deterministic PRNG (mulberry32) so the round-trip sample is the same on every run.
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe("formatExactDecimal", () => {
+  it.each([
+    [0.375, "0.375"],
+    [1e-7, "0.0000001"],
+    [2e-9, "0.000000002"],
+    [1.5e-7, "0.00000015"],
+    [1e21, "1000000000000000000000"],
+    [1.5e21, "1500000000000000000000"],
+    [100 / 333, "0.3003003003003003"],
+    [12, "12"],
+  ])("%s → %s", (value, expected) => {
+    expect(formatExactDecimal(value)).toBe(expected);
+  });
+
+  it.each([5e-324, Number.MAX_VALUE])("writes %s without exponent or grouping", (value) => {
+    const text = formatExactDecimal(value);
+    expect(text).not.toMatch(/[e,]/i);
+    expect(parseDecimalInput(text)).toBe(value);
+  });
+
+  it.each([
+    [333, 2, "333.00"],
+    [0.1, 2, "0.10"],
+    [186.255, 2, "186.255"],
+    [1e21, 2, "1000000000000000000000.00"],
+    [1e-7, 2, "0.0000001"],
+  ])("%s with at least %i decimals → %s", (value, minFractionDigits, expected) => {
+    expect(formatExactDecimal(value, minFractionDigits)).toBe(expected);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])("leaves %s to validation", (value) => {
+    expect(formatExactDecimal(value)).toBe(String(value));
+  });
+
+  it.each([100 / 333, 1 / 3, 0.1 + 0.2, 2 ** 53 + 2])("parses back to exactly %s", (value) => {
+    expect(parseDecimalInput(formatExactDecimal(value))).toBe(value);
+    expect(parseDecimalInput(formatExactDecimal(value, 2))).toBe(value);
+  });
+
+  it("parses back to exactly the same double for 10k seeded values across exp(±50)", () => {
+    const random = seededRandom(20260913);
+    const failures: string[] = [];
+    for (let i = 0; i < 10_000; i += 1) {
+      const value = Math.exp((random() * 2 - 1) * 50);
+      for (const minFractionDigits of [0, 2]) {
+        const text = formatExactDecimal(value, minFractionDigits);
+        if (parseDecimalInput(text) !== value) failures.push(`${value} (${minFractionDigits}) → ${text}`);
+      }
+    }
+    expect(failures).toEqual([]);
   });
 });
 

@@ -1,12 +1,10 @@
-import { CANDIDATE_TRANSACTION_ID } from "@/domain/portfolio/portfolio.constants";
 import {
   calculateQuantityFromAmount,
   calculateTotalAmount,
   validateTransactionInput,
 } from "@/domain/transactions/transaction-validation.service";
-import type { OversellViolation, TransactionLike, ValidationIssue } from "@/domain/transactions/transaction.type";
-import { formatIsoDate } from "@/utils/date-format.utils";
-import { formatFixedDecimal, formatSharesExact, formatTrimmedDecimal } from "@/utils/number-format.utils";
+import type { ValidationIssue } from "@/domain/transactions/transaction.type";
+import { formatFixedDecimal, formatTrimmedDecimal } from "@/utils/number-format.utils";
 import { parseDecimalInput } from "@/utils/number-parse.utils";
 import { DERIVED_AMOUNT_DECIMALS, DERIVED_SHARES_DECIMALS } from "./transaction-form.constants";
 import { TRANSACTION_FORM_MESSAGES, TRANSACTION_VALIDATION_MESSAGES } from "./transaction-messages.constants";
@@ -24,7 +22,7 @@ function isPositiveNumber(value: number): boolean {
 }
 
 // Exact share count for the form: typed shares, or amount ÷ price (NaN when it cannot be computed yet).
-function quantityFromForm(values: TransactionFormValues): number {
+export function quantityFromFormValues(values: TransactionFormValues): number {
   const size = parseDecimalInput(values.sizeText);
   if (values.sizeField === "quantity") return size;
   const price = parseDecimalInput(values.price);
@@ -44,7 +42,7 @@ export function positionSizeDisplay(values: TransactionFormValues): PositionSize
     };
   }
 
-  const quantity = quantityFromForm(values);
+  const quantity = quantityFromFormValues(values);
   return {
     quantity: isPositiveNumber(quantity) ? formatTrimmedDecimal(quantity, DERIVED_SHARES_DECIMALS) : "",
     amount: values.sizeText,
@@ -75,7 +73,7 @@ export function buildTransactionInput(values: TransactionFormValues, today: stri
       ticker: values.ticker,
       type: values.type,
       date: values.date,
-      quantity: quantityFromForm(values),
+      quantity: quantityFromFormValues(values),
       price: parseDecimalInput(values.price),
     },
     today,
@@ -99,20 +97,4 @@ export function defaultFormPortfolioId(active: ActivePortfolio, portfolios: read
 // A portfolio deleted while the form is open is treated as not chosen, so the select and the submit agree.
 export function availablePortfolioId(portfolioId: string, portfolios: readonly PortfolioOption[]): string {
   return portfolios.some((portfolio) => portfolio.id === portfolioId) ? portfolioId : "";
-}
-
-// The failing SELL is the new one unless it is a transaction already in the stored history
-// (the server reports the id of its rolled-back insert, which the client never saw).
-export function isNewTransactionViolation(violation: OversellViolation, history: readonly TransactionLike[] | undefined): boolean {
-  if (violation.transactionId === CANDIDATE_TRANSACTION_ID) return true;
-  return !(history ?? []).some((transaction) => transaction.id === violation.transactionId);
-}
-
-export function oversellMessage(violation: OversellViolation, isNewTransaction: boolean): string {
-  const requested = formatSharesExact(violation.requested);
-  const available = formatSharesExact(violation.available);
-  const date = formatIsoDate(violation.date);
-  return isNewTransaction
-    ? `Selling ${requested} ${violation.ticker} on ${date} needs more shares than the ${available} held at that point.`
-    : `This would leave your saved sale of ${requested} ${violation.ticker} on ${date} without enough shares: only ${available} would be held then.`;
 }

@@ -167,7 +167,32 @@ Progress:
   - **Verification.** Browser-verified with Playwright. Three independent reviews (financial/server, React/UI/architecture, completeness/tests) found no defects. The 3 NVDA buys that existed were deleted at the user's request, so the dev deployment started empty.
   - **For Phase 9.** `OversellViolation` has no `portfolioId`. When the edit form lets a trade move between portfolios, name the portfolio in the message (the violation's `transactionId` can be looked up in the history). The combined view's invalid-history message has the same gap.
   - **Known limitation.** Name normalization does not strip zero-width characters, so visually identical names are possible if pasted deliberately.
-- Not yet: transactions table with edit/delete (Phase 9), full portfolio/dashboard/performance screens, responsive layout and UI states (Phase 13).
+- **Phase 9 (transactions table, edit, delete) done.** Convex functions and schema are unchanged.
+  - **List (`/transactions`)**
+    - `TransactionsView`, inside a required `<Suspense>` because it reads `useSearchParams` on a static page, shows the active portfolio scope. Columns: Date, Type badge, Ticker, Portfolio (only in "All portfolios"), Shares, Price, Total and a "⋯" menu.
+    - Row menu: `RowActionsMenu` uses the Popover API, placed with `position: fixed` from the trigger rect and measured against `documentElement.clientWidth/Height`.
+    - Sort is a total order (`sortTransactionList`, ties newest first; portfolio names tie-break by accent-sensitive collation, then id).
+    - Filters: ticker prefix, type, inclusive date range.
+    - Filters and sort live in the URL (`transaction-list-query.utils.ts`). The in-page draft is the source of truth and URL writes use `window.history.replaceState`. `reconcileUrlQuery` tells our own delayed router commits (`pendingWrites`) apart from real navigations.
+    - Rows are view models built by `toTransactionRows`.
+  - **Edit (`/transactions/[id]/edit`)**
+    - An async page with a server-sanitized `returnHref`; `EditTransactionView` reuses `TransactionForm` through `useTransactionFormFields`, which the create hook also uses.
+    - Exact prefill (`editFormValuesFromTransaction`): `formatExactDecimal` text parses back to the stored doubles. `chooseEditSizeDriver` reopens short share counts with Shares driving, and amount-entered trades with Amount driving only when amount ÷ price is proven to give the same quantity.
+    - An unchanged save sends no mutation; a partial edit keeps quantity, price and totalAmount bit-identical (browser-verified against Convex).
+    - The pre-check `findUpdateOversell` mirrors `update` (it keeps `id` and `createdAt`; it checks the new position, then the old one).
+    - Changes or deletions made elsewhere show a banner, and Save is disabled until "Load latest version". A save or create that finishes after the user left does not navigate.
+  - **Delete**
+    - `useDeleteTransaction` plus `ConfirmDialog` (a native `<dialog>` mounted only while open).
+    - `findRemovalOversell` blocks deleting a BUY that a later sale needs, with an "Edit that sale" link.
+    - The dialog can be closed while a deletion is pending (Convex queues mutations offline). A failure reopens it; success is announced in a polite status.
+  - **Messages.** Oversell texts come from `describeOversell` (actions create/update/remove). The portfolio name is included only with more than one portfolio, and only when it can be proven from the history. With one portfolio, the create texts equal Phase 8.
+  - **Verification.** A design panel (3 designs, 2 judges), a 5-agent implementation, and an adversarial review of 4 dimensions with a skeptic per finding. 9 confirmed findings were fixed; one limitation is accepted (below). Browser-verified with Playwright: sorting and `aria-sort`, URL filters, reload, nav reset, edit prefill, exact saves, oversell messages, blocked and confirmed delete, a double click giving one mutation, an offline delete, banners, focus return, no console warnings. 523 tests.
+  - **Accepted limitations**
+    - If two filter changes are batched into one router commit that returns to the URL already shown, a stale pending write can make a later click on the Transactions nav link keep the filters. Timing-dependent and rare. Fixing it from the browser URL would reintroduce keystroke rollback, because Next's `HistoryUpdater` rewrites history on every commit.
+    - There is no server compare-and-swap for concurrent edits; the banner covers what the client can see. Revisit in Phase 15.
+    - Add Transaction still returns to an unfiltered list.
+    - Focus can drop to `<body>` when the confirm button disables or disappears inside the dialog (Phase 13).
+- Not yet: full portfolio/dashboard/performance screens (Phases 10–12), responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`
 

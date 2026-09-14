@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { CANDIDATE_TRANSACTION_ID } from "@/domain/portfolio/portfolio.constants";
 import { buildPositions } from "@/domain/portfolio/position.service";
 import { calculateTotalAmount } from "@/domain/transactions/transaction-validation.service";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -9,9 +8,8 @@ import {
   buildTransactionInput,
   defaultFormPortfolioId,
   fieldErrorsFromIssues,
-  isNewTransactionViolation,
-  oversellMessage,
   positionSizeDisplay,
+  quantityFromFormValues,
 } from "./transaction-form.utils";
 
 const TODAY = "2025-06-15";
@@ -205,46 +203,21 @@ describe("fieldErrorsFromIssues", () => {
   });
 });
 
-describe("oversellMessage", () => {
-  const violation = { ticker: "AAPL", date: "2024-11-10", transactionId: "x", available: 0.123456, requested: 0.12346 };
-
-  it("describes the new sale with exact share counts and a readable date", () => {
-    expect(oversellMessage(violation, true)).toBe(
-      "Selling 0.12346 AAPL on Nov 10, 2024 needs more shares than the 0.123456 held at that point.",
-    );
+describe("quantityFromFormValues", () => {
+  it("reads typed shares as the number", () => {
+    expect(quantityFromFormValues(form({ sizeField: "quantity", sizeText: "10.5" }))).toBe(10.5);
   });
 
-  it("points at the saved sale when that is the one left short", () => {
-    expect(oversellMessage(violation, false)).toBe(
-      "This would leave your saved sale of 0.12346 AAPL on Nov 10, 2024 without enough shares: only 0.123456 would be held then.",
-    );
-  });
-});
-
-describe("isNewTransactionViolation", () => {
-  const stored = {
-    id: "stored-1",
-    portfolioId: "p-retiro",
-    ticker: "AAPL",
-    type: "SELL" as const,
-    date: "2025-05-01",
-    quantity: 6,
-    price: 100,
-    totalAmount: 600,
-    createdAt: 1,
-  };
-  const base = { ticker: "AAPL", date: "2025-05-01", available: 5, requested: 6 };
-
-  it("is true for the client-side candidate", () => {
-    expect(isNewTransactionViolation({ ...base, transactionId: CANDIDATE_TRANSACTION_ID }, [stored])).toBe(true);
+  it("divides an amount by the price, unrounded", () => {
+    expect(quantityFromFormValues(form({ sizeText: "100", price: "333" }))).toBe(100 / 333);
   });
 
-  it("is false when the failing SELL is already stored", () => {
-    expect(isNewTransactionViolation({ ...base, transactionId: "stored-1" }, [stored])).toBe(false);
-  });
-
-  it("is true for a server id the client never saw (the rolled-back insert)", () => {
-    expect(isNewTransactionViolation({ ...base, transactionId: "rolled-back" }, [stored])).toBe(true);
-    expect(isNewTransactionViolation({ ...base, transactionId: "rolled-back" }, undefined)).toBe(true);
+  it.each([
+    [{ sizeField: "quantity" as const, sizeText: "1,5" }],
+    [{ sizeText: "abc" }],
+    [{ sizeText: "0" }],
+    [{ price: "" }],
+  ])("is NaN when the share count cannot be computed (%j)", (overrides) => {
+    expect(quantityFromFormValues(form(overrides))).toBeNaN();
   });
 });

@@ -141,6 +141,19 @@ export function validateSellSequence(transactions: readonly TransactionLike[]): 
   return result.ok ? { ok: true } : result;
 }
 
+// Replays one (portfolio, ticker) position exactly like the server's assertNoOversell: exact id and ticker match.
+function findPositionOversell(
+  transactions: readonly TransactionLike[],
+  portfolioId: string,
+  ticker: string,
+): OversellViolation | null {
+  const position = transactions.filter(
+    (transaction) => transaction.portfolioId === portfolioId && transaction.ticker === ticker,
+  );
+  const result = validateSellSequence(position);
+  return result.ok ? null : result.violation;
+}
+
 // Client pre-check for a transaction about to be created, mirroring the server: only a SELL can oversell,
 // only its own portfolio and ticker are replayed,
 // and the server stamps createdAt at insert time, so the candidate sorts after every stored same-day trade.
@@ -149,15 +162,49 @@ export function findCandidateOversell(
   candidate: TransactionInput,
 ): OversellViolation | null {
   if (candidate.type !== "SELL") return null;
-  const tickerHistory = history.filter(
-    (transaction) => transaction.portfolioId === candidate.portfolioId && transaction.ticker === candidate.ticker,
-  );
   const candidateTransaction: TransactionLike = {
     ...candidate,
     id: CANDIDATE_TRANSACTION_ID,
     totalAmount: calculateTotalAmount(candidate.quantity, candidate.price),
     createdAt: Number.MAX_SAFE_INTEGER,
   };
-  const result = validateSellSequence([...tickerHistory, candidateTransaction]);
-  return result.ok ? null : result.violation;
+  return findPositionOversell([...history, candidateTransaction], candidate.portfolioId, candidate.ticker);
+}
+
+// Client pre-check for an edit, mirroring the server's update step for step. `edited` must be the validated
+// input and `original` the live stored doc: the patch keeps its id and createdAt, so its same-day order holds.
+// The new position is checked first (for a BUY too), then the position the trade left, if it moved.
+export function findUpdateOversell(
+  history: readonly TransactionLike[],
+  original: TransactionLike,
+  edited: TransactionInput,
+): OversellViolation | null {
+  const replacement: TransactionLike = {
+    ...edited,
+    id: original.id,
+    createdAt: original.createdAt,
+    totalAmount: calculateTotalAmount(edited.quantity, edited.price),
+  };
+  const next = [...history.filter((transaction) => transaction.id !== original.id), replacement];
+
+  const violation = findPositionOversell(next, edited.portfolioId, edited.ticker);
+  if (violation) return violation;
+  if (original.portfolioId !== edited.portfolioId || original.ticker !== edited.ticker) {
+    return findPositionOversell(next, original.portfolioId, original.ticker);
+  }
+  return null;
+}
+
+// Client pre-check for a delete, mirroring the server's remove: removing a SELL only adds back shares,
+// so it is never blocked (and is always the way out of an invalid history).
+export function findRemovalOversell(
+  history: readonly TransactionLike[],
+  target: TransactionLike,
+): OversellViolation | null {
+  if (target.type === "SELL") return null;
+  return findPositionOversell(
+    history.filter((transaction) => transaction.id !== target.id),
+    target.portfolioId,
+    target.ticker,
+  );
 }
