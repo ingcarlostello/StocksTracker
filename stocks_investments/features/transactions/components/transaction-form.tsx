@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
+import { SelectField, type SelectOption } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
 import type { TransactionType } from "@/domain/transactions/transaction.type";
 import { TRANSACTION_TYPE_OPTIONS } from "../transaction-form.constants";
@@ -17,6 +18,7 @@ import type {
 
 type TransactionFormProps = {
   values: TransactionFormValues;
+  portfolioOptions: readonly SelectOption[];
   sizeDisplay: PositionSizeDisplay;
   fieldErrors: TransactionFieldErrors;
   formError: string | null;
@@ -31,6 +33,7 @@ type TransactionFormProps = {
 
 export function TransactionForm({
   values,
+  portfolioOptions,
   sizeDisplay,
   fieldErrors,
   formError,
@@ -56,6 +59,16 @@ export function TransactionForm({
   return (
     <Card className="max-w-xl">
       <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <SelectField
+          id="portfolioId"
+          label="Portfolio"
+          placeholder="Choose a portfolio"
+          value={values.portfolioId}
+          options={portfolioOptions}
+          error={fieldErrors.portfolioId}
+          onChange={(value) => onFieldChange("portfolioId", value)}
+        />
+
         <SegmentedToggle
           name="type"
           legend="Type"

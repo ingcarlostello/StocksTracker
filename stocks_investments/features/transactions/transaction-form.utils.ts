@@ -10,6 +10,7 @@ import { formatFixedDecimal, formatSharesExact, formatTrimmedDecimal } from "@/u
 import { parseDecimalInput } from "@/utils/number-parse.utils";
 import { DERIVED_AMOUNT_DECIMALS, DERIVED_SHARES_DECIMALS } from "./transaction-form.constants";
 import { TRANSACTION_FORM_MESSAGES, TRANSACTION_VALIDATION_MESSAGES } from "./transaction-messages.constants";
+import type { ActivePortfolio, PortfolioOption } from "@/features/portfolio/portfolio-selection.type";
 import type {
   PositionSizeDisplay,
   PositionSizeField,
@@ -70,6 +71,7 @@ export function fieldErrorsFromIssues(
 export function buildTransactionInput(values: TransactionFormValues, today: string): TransactionInputResult {
   const result = validateTransactionInput(
     {
+      portfolioId: values.portfolioId,
       ticker: values.ticker,
       type: values.type,
       date: values.date,
@@ -86,6 +88,17 @@ export function buildTransactionInput(values: TransactionFormValues, today: stri
     delete fieldErrors.amount;
   }
   return { ok: false, fieldErrors };
+}
+
+// The active portfolio, or the only one there is; otherwise the user has to choose.
+export function defaultFormPortfolioId(active: ActivePortfolio, portfolios: readonly PortfolioOption[]): string {
+  if (active.kind === "portfolio") return active.portfolio.id;
+  return portfolios.length === 1 ? portfolios[0].id : "";
+}
+
+// A portfolio deleted while the form is open is treated as not chosen, so the select and the submit agree.
+export function availablePortfolioId(portfolioId: string, portfolios: readonly PortfolioOption[]): string {
+  return portfolios.some((portfolio) => portfolio.id === portfolioId) ? portfolioId : "";
 }
 
 // The failing SELL is the new one unless it is a transaction already in the stored history

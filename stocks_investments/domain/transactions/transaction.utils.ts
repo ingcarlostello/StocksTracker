@@ -8,6 +8,7 @@ export function toTransactionLike<TId extends string>({
 }: StoredTransaction<TId>): TransactionLike<TId> {
   return {
     id: _id,
+    portfolioId: fields.portfolioId,
     ticker: fields.ticker,
     type: fields.type,
     date: fields.date,

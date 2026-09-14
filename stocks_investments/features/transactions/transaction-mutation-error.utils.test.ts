@@ -26,6 +26,14 @@ describe("toTransactionMutationError", () => {
     });
   });
 
+  it("reads a VALIDATION payload about an unknown portfolio", () => {
+    const error = new ConvexError({ code: "VALIDATION", issues: [{ field: "portfolioId", code: "UNKNOWN_PORTFOLIO" }] });
+    expect(toTransactionMutationError(error)).toEqual({
+      kind: "validation",
+      issues: [{ field: "portfolioId", code: "UNKNOWN_PORTFOLIO" }],
+    });
+  });
+
   it("reads NOT_FOUND", () => {
     expect(toTransactionMutationError(new ConvexError({ code: "NOT_FOUND", id: "x" }))).toEqual({ kind: "not-found" });
   });

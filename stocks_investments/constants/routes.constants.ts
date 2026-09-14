@@ -1,6 +1,7 @@
 export const ROUTES = {
   DASHBOARD: "/dashboard",
   PORTFOLIO: "/portfolio",
+  PORTFOLIOS: "/portfolios",
   TRANSACTIONS: "/transactions",
   ADD_TRANSACTION: "/transactions/new",
   PERFORMANCE: "/performance",

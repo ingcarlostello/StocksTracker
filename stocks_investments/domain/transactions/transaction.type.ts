@@ -22,6 +22,8 @@ export type OversellViolation = {
 export type SellSequenceResult = { ok: true } | { ok: false; violation: OversellViolation };
 
 export type TransactionInput = {
+  // Every transaction belongs to exactly one portfolio; positions never mix portfolios.
+  portfolioId: string;
   ticker: string;
   type: TransactionType;
   date: string;
@@ -44,6 +46,9 @@ export type ValidationIssue = {
 };
 
 export type TransactionValidationCode =
+  | "MISSING_PORTFOLIO"
+  // Raised by the server when the id does not match a stored portfolio.
+  | "UNKNOWN_PORTFOLIO"
   | "INVALID_TICKER"
   | "INVALID_TYPE"
   | "INVALID_DATE"

@@ -27,6 +27,9 @@ export function validateTransactionInput(
   const ticker = normalizeTicker(input.ticker);
   const issues: ValidationIssue[] = [];
 
+  if (input.portfolioId.trim() === "") {
+    issues.push({ field: "portfolioId", code: "MISSING_PORTFOLIO" });
+  }
   if (!TICKER_REGEX.test(ticker)) {
     issues.push({ field: "ticker", code: "INVALID_TICKER" });
   }

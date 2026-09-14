@@ -12,7 +12,8 @@ export function useTransactionMutations() {
   const createTransaction = useCallback(
     async (input: TransactionInput): Promise<TransactionMutationResult<Id<"transactions">>> => {
       try {
-        return { ok: true, value: await create(input) };
+        // Ids come from the Convex portfolio list; the server rejects one that no longer exists.
+        return { ok: true, value: await create({ ...input, portfolioId: input.portfolioId as Id<"portfolios"> }) };
       } catch (error) {
         const mutationError = toTransactionMutationError(error);
         // Expected rule violations are shown in the form; anything else also goes to the console for debugging.

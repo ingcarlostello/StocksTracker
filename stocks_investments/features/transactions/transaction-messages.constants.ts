@@ -1,6 +1,8 @@
 import type { TransactionValidationCode } from "@/domain/transactions/transaction.type";
 
 export const TRANSACTION_VALIDATION_MESSAGES: Record<TransactionValidationCode, string> = {
+  MISSING_PORTFOLIO: "Choose a portfolio.",
+  UNKNOWN_PORTFOLIO: "This portfolio no longer exists. Choose another one.",
   INVALID_TICKER: "Enter a valid US ticker, like AAPL or BRK.B.",
   INVALID_TYPE: "Choose Buy or Sell.",
   INVALID_DATE: "Enter a valid date.",

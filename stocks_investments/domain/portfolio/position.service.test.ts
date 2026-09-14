@@ -4,6 +4,7 @@ import { OversellError } from "./position.errors";
 import {
   applyTransaction,
   buildPositions,
+  combinePositions,
   emptyPosition,
   findCandidateOversell,
   sellCostBasis,
@@ -11,6 +12,9 @@ import {
   validateSellSequence,
 } from "./position.service";
 import { CANDIDATE_TRANSACTION_ID, SHARES_EPSILON } from "./portfolio.constants";
+
+const PORTFOLIO = "p-retiro";
+const OTHER_PORTFOLIO = "p-viajes";
 
 function makeFactory() {
   let sequence = 0;
@@ -20,10 +24,12 @@ function makeFactory() {
     quantity: number,
     price: number,
     date = "2025-01-02",
+    portfolioId = PORTFOLIO,
   ): TransactionLike {
     sequence += 1;
     return {
       id: `t${String(sequence).padStart(3, "0")}`,
+      portfolioId,
       ticker,
       type,
       date,
@@ -33,6 +39,11 @@ function makeFactory() {
       createdAt: sequence,
     };
   }
+}
+
+// A not-yet-saved transaction for findCandidateOversell.
+function input(type: TransactionType, quantity: number, date = "2025-03-01", ticker = "AAPL", portfolioId = PORTFOLIO) {
+  return { portfolioId, ticker, type, date, quantity, price: 100 };
 }
 
 describe("applyTransaction", () => {
@@ -220,14 +231,6 @@ describe("buildPositions with SELL (average cost)", () => {
 });
 
 describe("findCandidateOversell", () => {
-  const input = (type: TransactionType, quantity: number, date = "2025-03-01", ticker = "AAPL") => ({
-    ticker,
-    type,
-    date,
-    quantity,
-    price: 100,
-  });
-
   it("never flags a BUY", () => {
     expect(findCandidateOversell([], input("BUY", 5))).toBeNull();
   });
@@ -273,6 +276,111 @@ describe("findCandidateOversell", () => {
       input("SELL", 5, "2025-03-01"),
     );
     expect(violation).toMatchObject({ transactionId: laterSell.id, available: 5, requested: 6 });
+  });
+});
+
+describe("positions across portfolios", () => {
+  it("keeps the average cost of each portfolio separate and adds up the combined position", () => {
+    const tx = makeFactory();
+    const positions = buildPositions([
+      tx("BUY", "TSLA", 1, 100, "2025-01-02", PORTFOLIO),
+      tx("BUY", "TSLA", 1, 300, "2025-01-03", OTHER_PORTFOLIO),
+      // At average cost 100 in Retiro this realizes +50; a mixed replay would use 200 and realize −50.
+      tx("SELL", "TSLA", 1, 150, "2025-01-04", PORTFOLIO),
+    ]);
+    expect(positions).toEqual([{ ticker: "TSLA", shares: 1, costBasis: 300, realizedGain: 50 }]);
+  });
+
+  it("rejects a SELL funded only by another portfolio's shares", () => {
+    const tx = makeFactory();
+    const sell = tx("SELL", "TSLA", 1, 150, "2025-01-04", PORTFOLIO);
+    expect(validateSellSequence([tx("BUY", "TSLA", 5, 100, "2025-01-02", OTHER_PORTFOLIO), sell])).toEqual({
+      ok: false,
+      violation: { ticker: "TSLA", date: "2025-01-04", transactionId: sell.id, available: 0, requested: 1 },
+    });
+  });
+
+  it("gives one portfolio the same positions whether or not other portfolios are replayed with it", () => {
+    const tx = makeFactory();
+    const retiro = [
+      tx("BUY", "AAPL", 10, 100, "2025-01-02", PORTFOLIO),
+      tx("SELL", "AAPL", 4, 130, "2025-02-01", PORTFOLIO),
+    ];
+    const viajes = [tx("BUY", "MSFT", 3, 50, "2025-01-05", OTHER_PORTFOLIO)];
+    const all = buildPositions([...viajes, ...retiro]);
+    expect(all.filter((position) => position.ticker === "AAPL")).toEqual(buildPositions(retiro));
+    expect(all).toEqual(combinePositions([...buildPositions(retiro), ...buildPositions(viajes)]));
+  });
+
+  it("closes each portfolio's position independently before combining", () => {
+    const tx = makeFactory();
+    const [position] = buildPositions([
+      tx("BUY", "VOO", 0.1, 400, "2025-01-02", PORTFOLIO),
+      tx("BUY", "VOO", 0.2, 400, "2025-01-02", PORTFOLIO),
+      tx("SELL", "VOO", 0.3, 410, "2025-01-03", PORTFOLIO),
+      tx("BUY", "VOO", 2, 500, "2025-01-04", OTHER_PORTFOLIO),
+    ]);
+    expect(position.shares).toBe(2);
+    expect(position.costBasis).toBe(1000);
+  });
+
+  it("ignores another portfolio's shares in the candidate check", () => {
+    const tx = makeFactory();
+    const otherBuy = tx("BUY", "AAPL", 10, 100, "2025-01-01", OTHER_PORTFOLIO);
+    expect(findCandidateOversell([otherBuy], input("SELL", 1))).not.toBeNull();
+    expect(findCandidateOversell([otherBuy], input("SELL", 1, "2025-03-01", "AAPL", OTHER_PORTFOLIO))).toBeNull();
+  });
+
+  it("ignores a violation in another portfolio when checking a candidate", () => {
+    const tx = makeFactory();
+    const brokenOther = tx("SELL", "AAPL", 99, 100, "2025-01-01", OTHER_PORTFOLIO);
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01", PORTFOLIO);
+    expect(findCandidateOversell([brokenOther, buy], input("SELL", 5))).toBeNull();
+  });
+});
+
+describe("moving a transaction between portfolios", () => {
+  // Mirrors convex/transactions.ts update: both the destination and the source position are re-checked.
+  it("is rejected in the source portfolio when a moved BUY leaves its SELL uncovered", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "TSLA", 5, 100, "2025-01-02", PORTFOLIO);
+    const sell = tx("SELL", "TSLA", 2, 120, "2025-01-03", PORTFOLIO);
+    const moved = { ...buy, portfolioId: OTHER_PORTFOLIO };
+    const history = [moved, sell];
+    const destination = history.filter((t) => t.portfolioId === OTHER_PORTFOLIO);
+    const source = history.filter((t) => t.portfolioId === PORTFOLIO);
+    expect(validateSellSequence(destination)).toEqual({ ok: true });
+    expect(validateSellSequence(source)).toMatchObject({ ok: false, violation: { transactionId: sell.id, available: 0 } });
+  });
+
+  it("is rejected in the destination portfolio when a moved SELL has nothing to sell there", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "TSLA", 5, 100, "2025-01-02", PORTFOLIO);
+    const sell = tx("SELL", "TSLA", 2, 120, "2025-01-03", PORTFOLIO);
+    const history = [buy, { ...sell, portfolioId: OTHER_PORTFOLIO }];
+    expect(validateSellSequence(history.filter((t) => t.portfolioId === PORTFOLIO))).toEqual({ ok: true });
+    expect(validateSellSequence(history.filter((t) => t.portfolioId === OTHER_PORTFOLIO)).ok).toBe(false);
+  });
+});
+
+describe("combinePositions", () => {
+  it("adds shares, cost basis and realized gain per ticker and sorts by ticker", () => {
+    expect(
+      combinePositions([
+        { ticker: "MSFT", shares: 1, costBasis: 50, realizedGain: 5 },
+        { ticker: "AAPL", shares: 2, costBasis: 200, realizedGain: 0 },
+        { ticker: "MSFT", shares: 3, costBasis: 90, realizedGain: -2 },
+      ]),
+    ).toEqual([
+      { ticker: "AAPL", shares: 2, costBasis: 200, realizedGain: 0 },
+      { ticker: "MSFT", shares: 4, costBasis: 140, realizedGain: 3 },
+    ]);
+  });
+
+  it("does not mutate its input", () => {
+    const position = { ticker: "AAPL", shares: 2, costBasis: 200, realizedGain: 0 };
+    combinePositions([position, { ...position }]);
+    expect(position).toEqual({ ticker: "AAPL", shares: 2, costBasis: 200, realizedGain: 0 });
   });
 });
 

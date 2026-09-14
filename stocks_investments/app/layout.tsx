@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/layout/app-shell";
+import { ActivePortfolioSwitcher } from "@/features/portfolio/components/active-portfolio-switcher";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -30,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full font-sans">
         <Providers>
-          <AppShell>{children}</AppShell>
+          <AppShell sidebarHeader={<ActivePortfolioSwitcher />}>{children}</AppShell>
         </Providers>
       </body>
     </html>
