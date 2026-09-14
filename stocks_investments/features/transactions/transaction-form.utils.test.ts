@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import { CANDIDATE_TRANSACTION_ID } from "@/domain/portfolio/portfolio.constants";
 import { buildPositions } from "@/domain/portfolio/position.service";
 import { calculateTotalAmount } from "@/domain/transactions/transaction-validation.service";
+import type { Id } from "@/convex/_generated/dataModel";
 import type { TransactionFormValues } from "./transaction-form.type";
 import {
+  availablePortfolioId,
   buildTransactionInput,
+  defaultFormPortfolioId,
   fieldErrorsFromIssues,
   isNewTransactionViolation,
   oversellMessage,
@@ -15,6 +18,7 @@ const TODAY = "2025-06-15";
 
 function form(overrides: Partial<TransactionFormValues> = {}): TransactionFormValues {
   return {
+    portfolioId: "p-retiro",
     type: "BUY",
     ticker: "tsla ",
     date: "2025-06-10",
@@ -87,7 +91,7 @@ describe("buildTransactionInput", () => {
   it("derives the exact share count from amount ÷ price", () => {
     expect(buildTransactionInput(form(), TODAY)).toEqual({
       ok: true,
-      input: { type: "BUY", ticker: "TSLA", date: "2025-06-10", quantity: 0.375, price: 200 },
+      input: { portfolioId: "p-retiro", type: "BUY", ticker: "TSLA", date: "2025-06-10", quantity: 0.375, price: 200 },
     });
   });
 
@@ -134,6 +138,13 @@ describe("buildTransactionInput", () => {
     });
   });
 
+  it("asks for a portfolio when none is chosen", () => {
+    expect(buildTransactionInput(form({ portfolioId: "" }), TODAY)).toEqual({
+      ok: false,
+      fieldErrors: { portfolioId: "Choose a portfolio." },
+    });
+  });
+
   it("reports every other invalid field with English messages", () => {
     expect(buildTransactionInput(form({ ticker: "", date: "2025-06-16" }), TODAY)).toEqual({
       ok: false,
@@ -145,6 +156,34 @@ describe("buildTransactionInput", () => {
     expect(buildTransactionInput(form({ date: "" }), TODAY)).toMatchObject({
       ok: false,
       fieldErrors: { date: "Enter a valid date." },
+    });
+  });
+});
+
+describe("portfolio choice", () => {
+  const retiro = { id: "p-retiro" as Id<"portfolios">, name: "Retiro", createdAt: 1 };
+  const viajes = { id: "p-viajes" as Id<"portfolios">, name: "Viajes", createdAt: 2 };
+
+  it("defaults to the portfolio selected in the sidebar", () => {
+    expect(defaultFormPortfolioId({ kind: "portfolio", portfolio: viajes }, [retiro, viajes])).toBe("p-viajes");
+  });
+
+  it("defaults to the only portfolio in the combined view", () => {
+    expect(defaultFormPortfolioId({ kind: "all" }, [retiro])).toBe("p-retiro");
+  });
+
+  it("makes the user choose in the combined view when there are several", () => {
+    expect(defaultFormPortfolioId({ kind: "all" }, [retiro, viajes])).toBe("");
+  });
+
+  it("drops a chosen portfolio that no longer exists", () => {
+    expect(availablePortfolioId("p-viajes", [retiro, viajes])).toBe("p-viajes");
+    expect(availablePortfolioId("p-deleted", [retiro, viajes])).toBe("");
+  });
+
+  it("shows a server-side unknown portfolio on the portfolio field", () => {
+    expect(fieldErrorsFromIssues([{ field: "portfolioId", code: "UNKNOWN_PORTFOLIO" }])).toEqual({
+      portfolioId: "This portfolio no longer exists. Choose another one.",
     });
   });
 });
@@ -185,6 +224,7 @@ describe("oversellMessage", () => {
 describe("isNewTransactionViolation", () => {
   const stored = {
     id: "stored-1",
+    portfolioId: "p-retiro",
     ticker: "AAPL",
     type: "SELL" as const,
     date: "2025-05-01",

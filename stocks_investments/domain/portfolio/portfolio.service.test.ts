@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { TransactionLike } from "../transactions/transaction.type";
 import { SHARES_EPSILON } from "./portfolio.constants";
+import { buildPositions } from "./position.service";
 import type { Position } from "./portfolio.type";
 import {
   averageCost,
@@ -142,5 +144,33 @@ describe("summarizePortfolio", () => {
       portfolioReturn: null,
       missingPriceTickers: [],
     });
+  });
+});
+
+describe("combined view across portfolios (buildPositions → buildHoldings → summarizePortfolio)", () => {
+  function trade(id: string, portfolioId: string, type: "BUY" | "SELL", ticker: string, quantity: number, price: number, date: string): TransactionLike {
+    return { id, portfolioId, ticker, type, date, quantity, price, totalAmount: quantity * price, createdAt: Number(id.slice(1)) };
+  }
+
+  const retiro = [trade("t1", "retiro", "BUY", "AAPL", 10, 100, "2025-01-02"), trade("t2", "retiro", "SELL", "AAPL", 4, 130, "2025-02-01")];
+  const viajes = [trade("t3", "viajes", "BUY", "AAPL", 2, 150, "2025-01-15"), trade("t4", "viajes", "BUY", "MSFT", 1, 400, "2025-01-20")];
+  const prices = { AAPL: 200, MSFT: 420 };
+
+  function summary(transactions: TransactionLike[]) {
+    return summarizePortfolio(buildHoldings(buildPositions(transactions), prices));
+  }
+
+  it("adds up each portfolio's value and invested amount", () => {
+    const all = summary([...retiro, ...viajes]);
+    const [a, b] = [summary(retiro), summary(viajes)];
+    expect(all.totalInvested).toBeCloseTo(a.totalInvested + b.totalInvested, 9);
+    expect(all.portfolioValue).toBeCloseTo((a.portfolioValue ?? 0) + (b.portfolioValue ?? 0), 9);
+    // Retiro keeps 6 AAPL at average 100 (600); Viajes holds 2 AAPL at 150 (300) and 1 MSFT (400).
+    expect(all).toEqual({ portfolioValue: 2020, totalInvested: 1300, totalGainLoss: 720, portfolioReturn: 720 / 1300, missingPriceTickers: [] });
+  });
+
+  it("shows one AAPL row with the combined shares and weighted average cost", () => {
+    const [aapl] = buildHoldings(buildPositions([...retiro, ...viajes]), prices);
+    expect(aapl).toMatchObject({ ticker: "AAPL", shares: 8, totalInvested: 900, averageCost: 112.5 });
   });
 });

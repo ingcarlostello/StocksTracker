@@ -11,6 +11,8 @@ export type PositionSizeField = "quantity" | "amount";
 
 // Raw text as typed; numbers are parsed only when the form is submitted.
 export type TransactionFormValues = {
+  // "" until a portfolio is chosen.
+  portfolioId: string;
   type: TransactionType;
   ticker: string;
   date: string;
@@ -24,7 +26,7 @@ export type PositionSizeDisplay = Record<PositionSizeField, string>;
 
 export type TransactionFormField = TransactionField | "amount";
 
-export type TransactionTextField = "ticker" | "date" | "price";
+export type TransactionTextField = "portfolioId" | "ticker" | "date" | "price";
 
 export type TransactionFieldErrors = Partial<Record<TransactionFormField, string>>;
 

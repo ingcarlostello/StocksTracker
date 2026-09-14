@@ -1,16 +1,22 @@
 "use client";
 
+import { ROUTES } from "@/constants/routes.constants";
 import { PriceStatus } from "@/features/market-data/components/price-status";
 import { formatIsoDate } from "@/utils/date-format.utils";
 import { formatSharesExact } from "@/utils/number-format.utils";
 import { usePortfolio } from "../hooks/use-portfolio.hook";
 import { HoldingsPreview } from "./holdings-preview";
+import { NoPortfoliosNotice } from "./no-portfolios-notice";
 
 export function PortfolioView() {
   const state = usePortfolio();
 
   if (state.status === "loading") {
     return <p className="text-sm text-muted">Loading portfolio…</p>;
+  }
+
+  if (state.status === "no-portfolios") {
+    return <NoPortfoliosNotice createHref={ROUTES.PORTFOLIOS} />;
   }
 
   if (state.status === "invalid-history") {

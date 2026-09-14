@@ -9,6 +9,7 @@ import {
 
 const TODAY = "2025-06-15";
 const valid: TransactionInput = {
+  portfolioId: "p-retiro",
   ticker: "AAPL",
   type: "BUY",
   date: "2025-06-10",
@@ -64,12 +65,17 @@ describe("validateTransactionInput", () => {
     expect(codesFor({ price })).toEqual(["INVALID_PRICE"]);
   });
 
+  it.each(["", "   "])("rejects a missing portfolio %j", (portfolioId) => {
+    expect(codesFor({ portfolioId })).toEqual(["MISSING_PORTFOLIO"]);
+  });
+
   it("rejects an unknown type", () => {
     expect(codesFor({ type: "HOLD" as TransactionInput["type"] })).toEqual(["INVALID_TYPE"]);
   });
 
   it("reports every invalid field at once", () => {
-    expect(codesFor({ ticker: "?", date: "2025-02-30", quantity: 0, price: -1 })).toEqual([
+    expect(codesFor({ portfolioId: "", ticker: "?", date: "2025-02-30", quantity: 0, price: -1 })).toEqual([
+      "MISSING_PORTFOLIO",
       "INVALID_TICKER",
       "INVALID_DATE",
       "INVALID_QUANTITY",

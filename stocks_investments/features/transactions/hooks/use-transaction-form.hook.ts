@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { findCandidateOversell } from "@/domain/portfolio/position.service";
 import { MARKET_TIME_ZONE } from "@/domain/transactions/transaction.constants";
 import type { TransactionType } from "@/domain/transactions/transaction.type";
+import { ALL_PORTFOLIOS_SCOPE } from "@/features/portfolio/active-portfolio.constants";
+import type { PortfolioOption } from "@/features/portfolio/portfolio-selection.type";
 import { todayIsoInTimeZone } from "@/utils/date.utils";
 import { TRANSACTION_ERROR_MESSAGES } from "../transaction-messages.constants";
 import type {
@@ -13,6 +15,7 @@ import type {
   TransactionMutationError,
 } from "../transaction-form.type";
 import {
+  availablePortfolioId,
   buildTransactionInput,
   fieldErrorsFromIssues,
   isNewTransactionViolation,
@@ -23,6 +26,8 @@ import { useTransactionMutations } from "./use-transaction-mutations.hook";
 import { useTransactions } from "./use-transactions.hook";
 
 type UseTransactionFormOptions = {
+  portfolios: readonly PortfolioOption[];
+  defaultPortfolioId: string;
   onCreated: () => void;
 };
 
@@ -30,8 +35,8 @@ function marketToday(): string {
   return todayIsoInTimeZone(MARKET_TIME_ZONE, Date.now());
 }
 
-function initialValues(): TransactionFormValues {
-  return { type: "BUY", ticker: "", date: marketToday(), price: "", sizeField: "amount", sizeText: "" };
+function initialValues(portfolioId: string): TransactionFormValues {
+  return { portfolioId, type: "BUY", ticker: "", date: marketToday(), price: "", sizeField: "amount", sizeText: "" };
 }
 
 function withoutFields(errors: TransactionFieldErrors, fields: readonly TransactionFormField[]): TransactionFieldErrors {
@@ -41,11 +46,17 @@ function withoutFields(errors: TransactionFieldErrors, fields: readonly Transact
   return next;
 }
 
-export function useTransactionForm({ onCreated }: UseTransactionFormOptions) {
-  const { transactions } = useTransactions();
+export function useTransactionForm({ portfolios, defaultPortfolioId, onCreated }: UseTransactionFormOptions) {
+  // Every portfolio's history: the oversell pre-check replays only the chosen portfolio and ticker.
+  const { transactions } = useTransactions(ALL_PORTFOLIOS_SCOPE);
   const { createTransaction } = useTransactionMutations();
 
-  const [values, setValues] = useState<TransactionFormValues>(initialValues);
+  const [storedValues, setValues] = useState<TransactionFormValues>(() => initialValues(defaultPortfolioId));
+  const portfolioId = availablePortfolioId(storedValues.portfolioId, portfolios);
+  const values = useMemo(
+    () => (portfolioId === storedValues.portfolioId ? storedValues : { ...storedValues, portfolioId }),
+    [portfolioId, storedValues],
+  );
   const [maxDate] = useState(marketToday);
   const [fieldErrors, setFieldErrors] = useState<TransactionFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);

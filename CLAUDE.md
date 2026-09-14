@@ -146,12 +146,27 @@ Progress:
   - New shared UI in `components/ui/`: `Button`/`ButtonLink` (variants `primary`, `secondary`, `outline-accent`), `Card`, `TextField` (label, `aria-invalid`/`aria-describedby`, trailing icon), `SegmentedToggle` (native radios, keyboard-accessible). New utils: `formatSharesExact`, `isRecord` (`utils/type-guard.utils.ts`).
   - Browser-verified with Playwright, including a server-side FUTURE_DATE via a shifted browser clock. The Convex client itself logs server-rejected mutations to the console; that noise is expected.
   - Deferred to Phase 13 (a11y polish): move focus to the first invalid field after a failed submit, avoid focus dropping to `body` while the submit button is disabled, and announce the calculated Amount/Shares value to screen readers (e.g. a polite live region).
-- **Next: multiple portfolios (user request, 2026-09-13), a new phase inserted between Phase 8 and Phase 9.** Named portfolios ("Viajes", "Retiro", …), each with its own transactions and positions. It goes first because Phases 9–12 all depend on the portfolio scope. Agreed design points:
-  - A `portfolios` table plus a `portfolioId` on every transaction.
-  - Average cost and oversell checks are per (portfolio, ticker).
-  - A combined view sums per-portfolio positions; it never replays all transactions together.
-  - Prices and `dailyCloses` stay shared.
-  - Before implementing, update the Phase 0 plan (Phases 9–12) and ask the user about: an "All portfolios" view, deleting a portfolio that has transactions, how the active portfolio is chosen in the UI, and moving shares between portfolios.
+- **Phase 8.5 (multiple portfolios) done** — added on user request (2026-09-13) between Phase 8 and Phase 9, because Phases 9–12 all depend on the portfolio scope. The Phase 0 plan has the details (§12).
+  - **Data.** `portfolios { name, nameKey, createdAt }` with index `by_name_key`. `transactions.portfolioId` is required, with indexes `by_portfolio_date` and `by_portfolio_ticker_date`.
+  - **Portfolio functions** (`convex/portfolios.ts`): `list` (creation order), `create`, `rename`, `remove`.
+    - Names are trimmed, whitespace-collapsed and NFC, at most 40 code points (`domain/portfolio/portfolio-name.service.ts`), and unique ignoring case and spacing.
+    - `remove` throws `NOT_EMPTY` while any transaction references the portfolio; history is never deleted with it.
+    - Errors: `ConvexError({ code: VALIDATION | DUPLICATE_NAME | NOT_FOUND | NOT_EMPTY })`.
+  - **Transaction functions.** `transactions.list` takes an optional `portfolioId`. `create`/`update` report a missing portfolio as the VALIDATION issue `UNKNOWN_PORTFOLIO` (the domain adds `MISSING_PORTFOLIO` for an empty id).
+  - **Oversell checks** replay only the (portfolio, ticker) position. `update` also re-checks the old position when the portfolio or ticker changed.
+  - **Positions.** `buildPositions` replays each (portfolio, ticker) separately, then `combinePositions` sums shares, cost basis and realized gain per ticker. The "All portfolios" view therefore equals the sum of each portfolio's view; transactions from different portfolios are never replayed together. `findCandidateOversell` filters by portfolio and ticker. Prices and `dailyCloses` stay shared.
+  - **Active portfolio.** A sidebar selector (`ActivePortfolioSwitcher`, passed to `AppShell` as `sidebarHeader`) offers "All portfolios" plus each portfolio.
+    - The choice is a per-browser preference in localStorage, through `adapters/browser-storage/local-storage-store.adapter.ts` (in-memory fallback when storage is blocked, follows other tabs).
+    - `useActivePortfolio` reads it with `useSyncExternalStore`; on the server it reports loading, so there is no hydration mismatch. A stored id that no longer exists resolves to "All portfolios".
+    - Screens read `activePortfolio.scope` and pass it to `useTransactions(scope | "skip")`.
+  - **Screens.**
+    - `/portfolios` (`ROUTES.PORTFOLIOS`, reached from "Manage portfolios", not in the nav) creates, renames inline and deletes after an inline confirmation. A portfolio with transactions shows why it cannot be deleted.
+    - The Add Transaction form has a Portfolio select first. It defaults to the active portfolio, or the only one; with several portfolios in "All portfolios" the user must choose. A portfolio deleted while the form is open counts as not chosen.
+    - With no portfolios, the form and `/portfolio` show `NoPortfoliosNotice`.
+  - **New shared UI:** `SelectField` (native select), `FieldShell` + `describeField` (label, hint and error wiring shared with `TextField`, which gained `hideLabel`), and the `Button` variant `danger`.
+  - **Verification.** Browser-verified with Playwright. Three independent reviews (financial/server, React/UI/architecture, completeness/tests) found no defects. The 3 NVDA buys that existed were deleted at the user's request, so the dev deployment started empty.
+  - **For Phase 9.** `OversellViolation` has no `portfolioId`. When the edit form lets a trade move between portfolios, name the portfolio in the message (the violation's `transactionId` can be looked up in the history). The combined view's invalid-history message has the same gap.
+  - **Known limitation.** Name normalization does not strip zero-width characters, so visually identical names are possible if pasted deliberately.
 - Not yet: transactions table with edit/delete (Phase 9), full portfolio/dashboard/performance screens, responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`

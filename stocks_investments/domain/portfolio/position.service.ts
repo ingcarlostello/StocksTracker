@@ -78,17 +78,51 @@ export function applyTransaction(position: Position, transaction: AppliedTransac
   }
 }
 
-// Replays each ticker in canonical order; positions come back sorted by ticker.
-// Throws OversellError when the history sells more than it holds.
+function compareTickers(a: Position, b: Position): number {
+  return a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0;
+}
+
+// Portfolio ids and tickers never contain a NUL character, so the pair maps to one key.
+function positionKey(transaction: Pick<TransactionLike, "portfolioId" | "ticker">): string {
+  return `${transaction.portfolioId}\u0000${transaction.ticker}`;
+}
+
+// Adds up same-ticker positions held in different portfolios; positions come back sorted by ticker.
+// Summing is exact under average cost: the combined average is total basis ÷ total shares.
+export function combinePositions(positions: readonly Position[]): Position[] {
+  const combined = new Map<string, Position>();
+
+  for (const position of positions) {
+    const current = combined.get(position.ticker);
+    combined.set(
+      position.ticker,
+      current === undefined
+        ? { ...position }
+        : {
+            ticker: position.ticker,
+            shares: current.shares + position.shares,
+            costBasis: current.costBasis + position.costBasis,
+            realizedGain: current.realizedGain + position.realizedGain,
+          },
+    );
+  }
+
+  return [...combined.values()].sort(compareTickers);
+}
+
+// Replays each (portfolio, ticker) pair in canonical order, so average cost and oversell checks never
+// borrow shares from another portfolio; then combines same-ticker positions across portfolios.
+// Throws OversellError at the first SELL, in canonical order, that needs more shares than its portfolio held.
 export function buildPositions(transactions: readonly TransactionLike[]): Position[] {
   const positions = new Map<string, Position>();
 
   for (const transaction of sortTransactions(transactions)) {
-    const current = positions.get(transaction.ticker) ?? emptyPosition(transaction.ticker);
-    positions.set(transaction.ticker, applyTransaction(current, transaction));
+    const key = positionKey(transaction);
+    const current = positions.get(key) ?? emptyPosition(transaction.ticker);
+    positions.set(key, applyTransaction(current, transaction));
   }
 
-  return [...positions.values()].sort((a, b) => (a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0));
+  return combinePositions([...positions.values()]);
 }
 
 // Non-throwing replay for callers that must render an invalid history instead of crashing.
@@ -108,13 +142,16 @@ export function validateSellSequence(transactions: readonly TransactionLike[]): 
 }
 
 // Client pre-check for a transaction about to be created, mirroring the server: only a SELL can oversell,
+// only its own portfolio and ticker are replayed,
 // and the server stamps createdAt at insert time, so the candidate sorts after every stored same-day trade.
 export function findCandidateOversell(
   history: readonly TransactionLike[],
   candidate: TransactionInput,
 ): OversellViolation | null {
   if (candidate.type !== "SELL") return null;
-  const tickerHistory = history.filter((transaction) => transaction.ticker === candidate.ticker);
+  const tickerHistory = history.filter(
+    (transaction) => transaction.portfolioId === candidate.portfolioId && transaction.ticker === candidate.ticker,
+  );
   const candidateTransaction: TransactionLike = {
     ...candidate,
     id: CANDIDATE_TRANSACTION_ID,

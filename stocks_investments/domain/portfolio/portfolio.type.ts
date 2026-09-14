@@ -1,4 +1,5 @@
 import type { OversellViolation } from "../transactions/transaction.type";
+import type { PORTFOLIO_ERROR_CODES } from "./portfolio.constants";
 
 export type Position = {
   ticker: string;
@@ -36,3 +37,23 @@ export type PortfolioSummary = {
   portfolioReturn: number | null;
   missingPriceTickers: string[];
 };
+
+// A named group of transactions ("Retiro", "Viajes"); positions are never shared between portfolios.
+// Generic id keeps the storage id type (e.g. a Convex Id) without importing it here.
+export type PortfolioLike<TId extends string = string> = {
+  id: TId;
+  name: string;
+  createdAt: number;
+};
+
+export type PortfolioNameIssueCode = "EMPTY_NAME" | "NAME_TOO_LONG";
+
+export type PortfolioNameResult =
+  | { ok: true; name: string; nameKey: string }
+  | { ok: false; code: PortfolioNameIssueCode };
+
+export type PortfolioErrorData =
+  | { code: typeof PORTFOLIO_ERROR_CODES.VALIDATION; issue: PortfolioNameIssueCode }
+  | { code: typeof PORTFOLIO_ERROR_CODES.DUPLICATE_NAME; name: string }
+  | { code: typeof PORTFOLIO_ERROR_CODES.NOT_FOUND; id: string }
+  | { code: typeof PORTFOLIO_ERROR_CODES.NOT_EMPTY; id: string };

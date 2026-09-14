@@ -9,6 +9,7 @@
  */
 
 import type * as dailyCloses from "../dailyCloses.js";
+import type * as portfolios from "../portfolios.js";
 import type * as transactions from "../transactions.js";
 
 import type {
@@ -19,6 +20,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   dailyCloses: typeof dailyCloses;
+  portfolios: typeof portfolios;
   transactions: typeof transactions;
 }>;
 
