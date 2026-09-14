@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { TransactionLike, TransactionType } from "../transactions/transaction.type";
+import type {
+  OversellViolation,
+  TransactionInput,
+  TransactionLike,
+  TransactionType,
+} from "../transactions/transaction.type";
 import { OversellError } from "./position.errors";
 import {
   applyTransaction,
@@ -7,6 +12,8 @@ import {
   combinePositions,
   emptyPosition,
   findCandidateOversell,
+  findRemovalOversell,
+  findUpdateOversell,
   sellCostBasis,
   tryBuildPositions,
   validateSellSequence,
@@ -488,5 +495,326 @@ describe("validateSellSequence", () => {
       tx("SELL", "AAPL", 10 + SHARES_EPSILON / 2, 100),
     ]);
     expect(result).toEqual({ ok: true });
+  });
+});
+
+// The input fields of a stored transaction, as the edit form would submit them untouched.
+function inputOf(transaction: TransactionLike): TransactionInput {
+  const { portfolioId, ticker, type, date, quantity, price } = transaction;
+  return { portfolioId, ticker, type, date, quantity, price };
+}
+
+describe("findUpdateOversell", () => {
+  it("accepts an unchanged valid history", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01");
+    const sell = tx("SELL", "AAPL", 4, 120, "2025-02-01");
+    const history = [buy, sell];
+    expect(findUpdateOversell(history, sell, inputOf(sell))).toBeNull();
+    expect(findUpdateOversell(history, buy, inputOf(buy))).toBeNull();
+  });
+
+  it("reports the later saved SELL when a BUY is lowered below it", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01");
+    const sell = tx("SELL", "AAPL", 6, 120, "2025-02-01");
+    expect(findUpdateOversell([buy, sell], buy, { ...inputOf(buy), quantity: 5 })).toEqual({
+      ticker: "AAPL",
+      date: "2025-02-01",
+      transactionId: sell.id,
+      available: 5,
+      requested: 6,
+    });
+  });
+
+  it("reports the edited SELL itself when it is raised above the holdings", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01");
+    const sell = tx("SELL", "AAPL", 4, 120, "2025-02-01");
+    expect(findUpdateOversell([buy, sell], sell, { ...inputOf(sell), quantity: 12 })).toEqual({
+      ticker: "AAPL",
+      date: "2025-02-01",
+      transactionId: sell.id,
+      available: 10,
+      requested: 12,
+    });
+  });
+
+  it("keeps the stored createdAt, so a same-day BUY entered before its SELL can be corrected", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 5, 100, "2025-03-01");
+    const sell = tx("SELL", "AAPL", 5, 110, "2025-03-01");
+    expect(buy.createdAt).toBeLessThan(sell.createdAt);
+    expect(findUpdateOversell([buy, sell], buy, { ...inputOf(buy), price: 101.5 })).toBeNull();
+  });
+
+  it("uses the edited values, not the stored ones, when checking a BUY", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01");
+    const sell = tx("SELL", "AAPL", 5, 120, "2025-02-01");
+    expect(findUpdateOversell([buy, sell], buy, { ...inputOf(buy), date: "2025-03-01" })).toMatchObject({
+      transactionId: sell.id,
+      available: 0,
+      requested: 5,
+    });
+  });
+
+  it("reports the SELL left short in the old portfolio when a BUY moves to another portfolio", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "TSLA", 5, 100, "2025-01-02", PORTFOLIO);
+    const sell = tx("SELL", "TSLA", 2, 120, "2025-01-03", PORTFOLIO);
+    expect(findUpdateOversell([buy, sell], buy, { ...inputOf(buy), portfolioId: OTHER_PORTFOLIO })).toEqual({
+      ticker: "TSLA",
+      date: "2025-01-03",
+      transactionId: sell.id,
+      available: 0,
+      requested: 2,
+    });
+  });
+
+  it("reports the old ticker's SELL when a BUY's ticker changes", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "TSLA", 5, 100, "2025-01-02");
+    const sell = tx("SELL", "TSLA", 2, 120, "2025-01-03");
+    expect(findUpdateOversell([buy, sell], buy, { ...inputOf(buy), ticker: "TSLX" })).toMatchObject({
+      ticker: "TSLA",
+      transactionId: sell.id,
+      available: 0,
+    });
+  });
+
+  it("reports a moved SELL in its new portfolio before any violation left in the old one", () => {
+    const tx = makeFactory();
+    const brokenEarlier = tx("SELL", "AAPL", 1, 100, "2024-12-01", PORTFOLIO);
+    const buy = tx("BUY", "AAPL", 5, 100, "2025-01-01", PORTFOLIO);
+    const sell = tx("SELL", "AAPL", 3, 120, "2025-02-01", PORTFOLIO);
+    const history = [brokenEarlier, buy, sell];
+    expect(findUpdateOversell(history, sell, { ...inputOf(sell), portfolioId: OTHER_PORTFOLIO })).toEqual({
+      ticker: "AAPL",
+      date: "2025-02-01",
+      transactionId: sell.id,
+      available: 0,
+      requested: 3,
+    });
+  });
+
+  it("accepts an edit that fixes a pre-existing oversell", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 5, 100, "2025-01-01");
+    const sell = tx("SELL", "AAPL", 8, 120, "2025-02-01");
+    expect(validateSellSequence([buy, sell]).ok).toBe(false);
+    expect(findUpdateOversell([buy, sell], sell, { ...inputOf(sell), quantity: 5 })).toBeNull();
+    expect(findUpdateOversell([buy, sell], buy, { ...inputOf(buy), quantity: 8 })).toBeNull();
+  });
+
+  it("still reports an invalid sale elsewhere in the edited position", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01");
+    const brokenSell = tx("SELL", "AAPL", 20, 120, "2025-03-01");
+    expect(findUpdateOversell([buy, brokenSell], buy, { ...inputOf(buy), price: 99 })).toMatchObject({
+      transactionId: brokenSell.id,
+    });
+  });
+
+  it("ignores an invalid position with another ticker or in another portfolio", () => {
+    const tx = makeFactory();
+    const brokenTicker = tx("SELL", "MSFT", 3, 100, "2025-01-01", PORTFOLIO);
+    const brokenPortfolio = tx("SELL", "AAPL", 3, 100, "2025-01-01", OTHER_PORTFOLIO);
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-02", PORTFOLIO);
+    const history = [brokenTicker, brokenPortfolio, buy];
+    expect(findUpdateOversell(history, buy, { ...inputOf(buy), quantity: 4 })).toBeNull();
+  });
+});
+
+describe("findRemovalOversell", () => {
+  it("never blocks removing a SELL, even from an invalid history", () => {
+    const tx = makeFactory();
+    const sell = tx("SELL", "AAPL", 5, 100, "2025-01-01");
+    const laterSell = tx("SELL", "AAPL", 5, 100, "2025-02-01");
+    expect(findRemovalOversell([sell, laterSell], sell)).toBeNull();
+  });
+
+  it("reports the SELL that a removed BUY was covering", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01");
+    const sell = tx("SELL", "AAPL", 4, 120, "2025-02-01");
+    expect(findRemovalOversell([buy, sell], buy)).toEqual({
+      ticker: "AAPL",
+      date: "2025-02-01",
+      transactionId: sell.id,
+      available: 0,
+      requested: 4,
+    });
+  });
+
+  it("allows removing a BUY when other buys still cover the sales", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01");
+    const otherBuy = tx("BUY", "AAPL", 5, 100, "2025-01-15");
+    const sell = tx("SELL", "AAPL", 4, 120, "2025-02-01");
+    expect(findRemovalOversell([buy, otherBuy, sell], buy)).toBeNull();
+  });
+
+  it("does not count a same-ticker BUY held in another portfolio", () => {
+    const tx = makeFactory();
+    const buy = tx("BUY", "AAPL", 10, 100, "2025-01-01", PORTFOLIO);
+    const sell = tx("SELL", "AAPL", 4, 120, "2025-02-01", PORTFOLIO);
+    const otherBuy = tx("BUY", "AAPL", 10, 100, "2025-01-01", OTHER_PORTFOLIO);
+    const history = [buy, sell, otherBuy];
+    expect(findRemovalOversell(history, otherBuy)).toBeNull();
+    expect(findRemovalOversell(history, buy)).toMatchObject({ transactionId: sell.id });
+  });
+});
+
+// Deterministic PRNG (mulberry32), so every run replays the same random histories.
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// An independent model of the server checks: a plain share counter per position, no position engine.
+const oracle = {
+  compare(a: TransactionLike, b: TransactionLike): number {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  },
+
+  replay(transactions: readonly TransactionLike[], portfolioId: string, ticker: string): OversellViolation | null {
+    const position = transactions
+      .filter((t) => t.portfolioId === portfolioId && t.ticker === ticker)
+      .sort(oracle.compare);
+    let shares = 0;
+    for (const t of position) {
+      if (t.type === "BUY") {
+        shares += t.quantity;
+        continue;
+      }
+      if (shares <= SHARES_EPSILON || t.quantity > shares + SHARES_EPSILON) {
+        return { ticker: t.ticker, date: t.date, transactionId: t.id, available: shares, requested: t.quantity };
+      }
+      shares = shares - t.quantity <= SHARES_EPSILON ? 0 : shares - t.quantity;
+    }
+    return null;
+  },
+
+  // Patches the stored doc in place, like ctx.db.patch: id and createdAt survive.
+  update(history: readonly TransactionLike[], original: TransactionLike, edited: TransactionInput) {
+    const next = history.map((t) => (t.id === original.id ? { ...t, ...edited } : t));
+    const moved = original.portfolioId !== edited.portfolioId || original.ticker !== edited.ticker;
+    const inNewPosition = oracle.replay(next, edited.portfolioId, edited.ticker);
+    if (inNewPosition) return { violation: inNewPosition, fromOldPosition: false };
+    const inOldPosition = moved ? oracle.replay(next, original.portfolioId, original.ticker) : null;
+    return { violation: inOldPosition, fromOldPosition: inOldPosition !== null };
+  },
+
+  remove(history: readonly TransactionLike[], target: TransactionLike): OversellViolation | null {
+    if (target.type === "SELL") return null;
+    return oracle.replay(
+      history.filter((t) => t.id !== target.id),
+      target.portfolioId,
+      target.ticker,
+    );
+  },
+};
+
+describe("pre-checks match an independent oracle on random histories", () => {
+  const PORTFOLIOS = [PORTFOLIO, OTHER_PORTFOLIO];
+  const TICKERS = ["AAPL", "MSFT"];
+  const DATES = ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04"];
+  // Includes 0.1 + 0.2 vs 0.3, so the SHARES_EPSILON tolerance is exercised.
+  const QUANTITIES = [0.1, 0.2, 0.3, 0.5, 1, 2, 3, 5];
+  const HISTORY_COUNT = 300;
+
+  function pick<T>(random: () => number, values: readonly T[]): T {
+    return values[Math.floor(random() * values.length)];
+  }
+
+  function randomInput(random: () => number): TransactionInput {
+    return {
+      portfolioId: pick(random, PORTFOLIOS),
+      ticker: pick(random, TICKERS),
+      type: random() < 0.6 ? "BUY" : "SELL",
+      date: pick(random, DATES),
+      quantity: pick(random, QUANTITIES),
+      price: pick(random, [50, 100.25]),
+    };
+  }
+
+  // Ids come from a shuffled sequence and createdAt collides often, so the id tiebreak matters.
+  function randomHistory(random: () => number): TransactionLike[] {
+    const count = 1 + Math.floor(random() * 12);
+    const ids = Array.from({ length: count }, (_, index) => `t${String(index).padStart(2, "0")}`);
+    for (let index = ids.length - 1; index > 0; index -= 1) {
+      const swap = Math.floor(random() * (index + 1));
+      [ids[index], ids[swap]] = [ids[swap], ids[index]];
+    }
+    return ids.map((id) => {
+      const input = randomInput(random);
+      return {
+        ...input,
+        id,
+        totalAmount: input.quantity * input.price,
+        createdAt: 1 + Math.floor(random() * 3),
+      };
+    });
+  }
+
+  function randomEdit(random: () => number, original: TransactionLike): TransactionInput {
+    const fresh = randomInput(random);
+    const edited = inputOf(original);
+    return {
+      portfolioId: random() < 0.3 ? fresh.portfolioId : edited.portfolioId,
+      ticker: random() < 0.3 ? fresh.ticker : edited.ticker,
+      type: random() < 0.25 ? fresh.type : edited.type,
+      date: random() < 0.4 ? fresh.date : edited.date,
+      quantity: random() < 0.5 ? fresh.quantity : edited.quantity,
+      price: random() < 0.2 ? fresh.price : edited.price,
+    };
+  }
+
+  it("findUpdateOversell equals the oracle", () => {
+    const random = seededRandom(9);
+    const outcomes = { violations: 0, clean: 0, fromOldPosition: 0 };
+    for (let run = 0; run < HISTORY_COUNT; run += 1) {
+      const history = randomHistory(random);
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const original = pick(random, history);
+        const edited = randomEdit(random, original);
+        const expected = oracle.update(history, original, edited);
+        expect(findUpdateOversell(history, original, edited), JSON.stringify({ history, original, edited })).toEqual(
+          expected.violation,
+        );
+        if (expected.violation) outcomes.violations += 1;
+        else outcomes.clean += 1;
+        if (expected.fromOldPosition) outcomes.fromOldPosition += 1;
+      }
+    }
+    // Guards the generator: both outcomes and the old-position branch must actually be exercised.
+    expect(outcomes.violations).toBeGreaterThan(100);
+    expect(outcomes.clean).toBeGreaterThan(100);
+    expect(outcomes.fromOldPosition).toBeGreaterThan(10);
+  });
+
+  it("findRemovalOversell equals the oracle", () => {
+    const random = seededRandom(17);
+    const outcomes = { violations: 0, clean: 0 };
+    for (let run = 0; run < HISTORY_COUNT; run += 1) {
+      const history = randomHistory(random);
+      for (const target of history) {
+        const expected = oracle.remove(history, target);
+        expect(findRemovalOversell(history, target), JSON.stringify({ history, target })).toEqual(expected);
+        if (expected) outcomes.violations += 1;
+        else outcomes.clean += 1;
+      }
+    }
+    expect(outcomes.violations).toBeGreaterThan(100);
+    expect(outcomes.clean).toBeGreaterThan(100);
   });
 });

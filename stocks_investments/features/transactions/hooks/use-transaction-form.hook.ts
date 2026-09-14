@@ -1,27 +1,14 @@
-import { useMemo, useState } from "react";
+import { useRef, useState } from "react";
+import { useMountedRef } from "@/hooks/use-mounted-ref.hook";
 import { findCandidateOversell } from "@/domain/portfolio/position.service";
-import { MARKET_TIME_ZONE } from "@/domain/transactions/transaction.constants";
-import type { TransactionType } from "@/domain/transactions/transaction.type";
 import { ALL_PORTFOLIOS_SCOPE } from "@/features/portfolio/active-portfolio.constants";
 import type { PortfolioOption } from "@/features/portfolio/portfolio-selection.type";
-import { todayIsoInTimeZone } from "@/utils/date.utils";
 import { TRANSACTION_ERROR_MESSAGES } from "../transaction-messages.constants";
-import type {
-  PositionSizeField,
-  TransactionFieldErrors,
-  TransactionTextField,
-  TransactionFormField,
-  TransactionFormValues,
-  TransactionMutationError,
-} from "../transaction-form.type";
-import {
-  availablePortfolioId,
-  buildTransactionInput,
-  fieldErrorsFromIssues,
-  isNewTransactionViolation,
-  oversellMessage,
-  positionSizeDisplay,
-} from "../transaction-form.utils";
+import type { TransactionFormValues, TransactionMutationError } from "../transaction-form.type";
+import { buildTransactionInput, fieldErrorsFromIssues } from "../transaction-form.utils";
+import { describeOversell } from "../transaction-oversell-message.utils";
+import type { OversellContext } from "../transaction-oversell.type";
+import { marketToday, useTransactionFormFields } from "./use-transaction-form-fields.hook";
 import { useTransactionMutations } from "./use-transaction-mutations.hook";
 import { useTransactions } from "./use-transactions.hook";
 
@@ -31,19 +18,8 @@ type UseTransactionFormOptions = {
   onCreated: () => void;
 };
 
-function marketToday(): string {
-  return todayIsoInTimeZone(MARKET_TIME_ZONE, Date.now());
-}
-
 function initialValues(portfolioId: string): TransactionFormValues {
   return { portfolioId, type: "BUY", ticker: "", date: marketToday(), price: "", sizeField: "amount", sizeText: "" };
-}
-
-function withoutFields(errors: TransactionFieldErrors, fields: readonly TransactionFormField[]): TransactionFieldErrors {
-  if (!fields.some((field) => field in errors)) return errors;
-  const next = { ...errors };
-  for (const field of fields) delete next[field];
-  return next;
 }
 
 export function useTransactionForm({ portfolios, defaultPortfolioId, onCreated }: UseTransactionFormOptions) {
@@ -51,49 +27,21 @@ export function useTransactionForm({ portfolios, defaultPortfolioId, onCreated }
   const { transactions } = useTransactions(ALL_PORTFOLIOS_SCOPE);
   const { createTransaction } = useTransactionMutations();
 
-  const [storedValues, setValues] = useState<TransactionFormValues>(() => initialValues(defaultPortfolioId));
-  const portfolioId = availablePortfolioId(storedValues.portfolioId, portfolios);
-  const values = useMemo(
-    () => (portfolioId === storedValues.portfolioId ? storedValues : { ...storedValues, portfolioId }),
-    [portfolioId, storedValues],
-  );
+  const fields = useTransactionFormFields({ initialValues: () => initialValues(defaultPortfolioId), portfolios });
+  const { values, setFieldErrors, setFormError } = fields;
   const [maxDate] = useState(marketToday);
-  const [fieldErrors, setFieldErrors] = useState<TransactionFieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Blocks a second submit before the disabled button has re-rendered.
+  const lockRef = useRef(false);
+  const mountedRef = useMountedRef();
 
-  const sizeDisplay = useMemo(() => positionSizeDisplay(values), [values]);
-
-  function clearErrors(fields: readonly TransactionFormField[]) {
-    setFieldErrors((current) => withoutFields(current, fields));
-    setFormError(null);
-  }
-
-  function setType(type: TransactionType) {
-    setValues((current) => ({ ...current, type }));
-    clearErrors(["type"]);
-  }
-
-  // Ticker is stored as typed (shown uppercase via CSS) so editing mid-string keeps the caret in place.
-  function setField(field: TransactionTextField, value: string) {
-    setValues((current) => ({ ...current, [field]: value }));
-    // A price change also changes the calculated shares or amount.
-    clearErrors(field === "price" ? ["price", "quantity", "amount"] : [field]);
-  }
-
-  // Editing shares or amount makes that input the driver; the other is recalculated from the price.
-  function setSize(field: PositionSizeField, text: string) {
-    setValues((current) => ({ ...current, sizeField: field, sizeText: text }));
-    clearErrors(["quantity", "amount"]);
-  }
-
-  function showMutationError(error: TransactionMutationError) {
+  function showMutationError(error: TransactionMutationError, context: OversellContext) {
     switch (error.kind) {
       case "validation":
         setFieldErrors(fieldErrorsFromIssues(error.issues, values.sizeField));
         return;
       case "oversell":
-        setFormError(oversellMessage(error.violation, isNewTransactionViolation(error.violation, transactions)));
+        setFormError(describeOversell(error.violation, context, portfolios));
         return;
       case "not-found":
         setFormError(TRANSACTION_ERROR_MESSAGES.NOT_FOUND);
@@ -104,7 +52,7 @@ export function useTransactionForm({ portfolios, defaultPortfolioId, onCreated }
   }
 
   async function submit() {
-    if (isSubmitting) return;
+    if (lockRef.current) return;
     setFormError(null);
 
     const built = buildTransactionInput(values, marketToday());
@@ -114,24 +62,39 @@ export function useTransactionForm({ portfolios, defaultPortfolioId, onCreated }
     }
     setFieldErrors({});
 
+    const context: OversellContext = { action: "create", candidate: built.input, history: transactions };
     // Instant feedback when the history is loaded; the server re-checks either way.
     const violation = transactions ? findCandidateOversell(transactions, built.input) : null;
     if (violation) {
-      setFormError(oversellMessage(violation, isNewTransactionViolation(violation, transactions)));
+      setFormError(describeOversell(violation, context, portfolios));
       return;
     }
 
+    lockRef.current = true;
     setIsSubmitting(true);
     const result = await createTransaction(built.input);
 
     // Stay locked on success: navigation is a transition, and re-enabling first would allow a duplicate create.
     if (result.ok) {
-      onCreated();
+      // A create that settles after the user left the page must not pull them back to the list.
+      if (mountedRef.current) onCreated();
       return;
     }
+    lockRef.current = false;
     setIsSubmitting(false);
-    showMutationError(result.error);
+    showMutationError(result.error, context);
   }
 
-  return { values, sizeDisplay, fieldErrors, formError, isSubmitting, maxDate, setType, setField, setSize, submit };
+  return {
+    values,
+    sizeDisplay: fields.sizeDisplay,
+    fieldErrors: fields.fieldErrors,
+    formError: fields.formError,
+    isSubmitting,
+    maxDate,
+    setType: fields.setType,
+    setField: fields.setField,
+    setSize: fields.setSize,
+    submit,
+  };
 }

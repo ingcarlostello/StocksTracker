@@ -1,12 +1,12 @@
 import { Search } from "lucide-react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { SelectField, type SelectOption } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
 import type { TransactionType } from "@/domain/transactions/transaction.type";
-import { TRANSACTION_TYPE_OPTIONS } from "../transaction-form.constants";
+import { TRANSACTION_FORM_FIRST_FIELD_ID, TRANSACTION_TYPE_OPTIONS } from "../transaction-form.constants";
 import { TRANSACTION_FORM_MESSAGES } from "../transaction-messages.constants";
 import type {
   PositionSizeDisplay,
@@ -25,6 +25,13 @@ type TransactionFormProps = {
   isSubmitting: boolean;
   maxDate: string;
   cancelHref: string;
+  submitLabel: string;
+  submittingLabel: string;
+  // Blocks saving for a reason other than an in-flight submit (e.g. the transaction changed elsewhere).
+  submitDisabled?: boolean;
+  // Banner shown above the fields.
+  notice?: ReactNode;
+  portfolioHint?: string;
   onTypeChange: (type: TransactionType) => void;
   onFieldChange: (field: TransactionTextField, value: string) => void;
   onSizeChange: (field: PositionSizeField, value: string) => void;
@@ -40,6 +47,11 @@ export function TransactionForm({
   isSubmitting,
   maxDate,
   cancelHref,
+  submitLabel,
+  submittingLabel,
+  submitDisabled = false,
+  notice,
+  portfolioHint,
   onTypeChange,
   onFieldChange,
   onSizeChange,
@@ -59,12 +71,15 @@ export function TransactionForm({
   return (
     <Card className="max-w-xl">
       <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-6">
+        {notice}
+
         <SelectField
-          id="portfolioId"
+          id={TRANSACTION_FORM_FIRST_FIELD_ID}
           label="Portfolio"
           placeholder="Choose a portfolio"
           value={values.portfolioId}
           options={portfolioOptions}
+          hint={portfolioHint}
           error={fieldErrors.portfolioId}
           onChange={(value) => onFieldChange("portfolioId", value)}
         />
@@ -146,8 +161,8 @@ export function TransactionForm({
           <ButtonLink href={cancelHref} variant="secondary">
             Cancel
           </ButtonLink>
-          <Button type="submit" variant="primary" disabled={isSubmitting}>
-            {isSubmitting ? "Adding…" : "Add Transaction"}
+          <Button type="submit" variant="primary" disabled={isSubmitting || submitDisabled}>
+            {isSubmitting ? submittingLabel : submitLabel}
           </Button>
         </div>
       </form>

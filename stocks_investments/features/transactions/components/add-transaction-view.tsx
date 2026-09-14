@@ -10,6 +10,7 @@ import { portfolioSelectOptions } from "@/features/portfolio/portfolio-options.u
 import type { PortfolioOption } from "@/features/portfolio/portfolio-selection.type";
 import { useIsClient } from "@/hooks/use-is-client.hook";
 import { useTransactionForm } from "../hooks/use-transaction-form.hook";
+import { TRANSACTION_SUBMIT_LABELS } from "../transaction-form.constants";
 import { defaultFormPortfolioId } from "../transaction-form.utils";
 import { TransactionForm } from "./transaction-form";
 
@@ -37,6 +38,8 @@ function AddTransactionForm({ portfolios, defaultPortfolioId }: AddTransactionFo
       isSubmitting={form.isSubmitting}
       maxDate={form.maxDate}
       cancelHref={ROUTES.TRANSACTIONS}
+      submitLabel={TRANSACTION_SUBMIT_LABELS.create.idle}
+      submittingLabel={TRANSACTION_SUBMIT_LABELS.create.pending}
       onTypeChange={form.setType}
       onFieldChange={form.setField}
       onSizeChange={form.setSize}
