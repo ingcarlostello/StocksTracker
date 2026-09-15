@@ -1,4 +1,4 @@
-import { ALL_PORTFOLIOS_VALUE } from "./active-portfolio.constants";
+import { ALL_PORTFOLIOS_LABEL, ALL_PORTFOLIOS_VALUE } from "./active-portfolio.constants";
 import type { ActivePortfolio, PortfolioOption, PortfolioScope } from "./portfolio-selection.type";
 
 // A stored id that no longer matches a portfolio (deleted, or from another deployment) falls back to all.
@@ -13,4 +13,9 @@ export function scopeOfActivePortfolio(active: ActivePortfolio): PortfolioScope 
 
 export function activePortfolioValue(active: ActivePortfolio): string {
   return active.kind === "all" ? ALL_PORTFOLIOS_VALUE : active.portfolio.id;
+}
+
+// "all portfolios" (lowercase, for captions) or the portfolio's name.
+export function activePortfolioScopeLabel(active: ActivePortfolio): string {
+  return active.kind === "all" ? ALL_PORTFOLIOS_LABEL.toLowerCase() : active.portfolio.name;
 }

@@ -1,16 +1,9 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-  type TableSortDirection,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/table";
+import { headerSortDirection } from "@/components/ui/table-sort.utils";
 import { ROW_ACTIONS_PANEL_ESTIMATED_HEIGHT, TRANSACTION_COLUMN_LABELS } from "../transaction-list.constants";
-import type { EffectiveSort, SortDirection, TransactionRow, TransactionSortKey } from "../transaction-list.type";
+import type { EffectiveSort, TransactionRow, TransactionSortKey } from "../transaction-list.type";
 import { TransactionTypeBadge } from "./transaction-type-badge";
 
 type TransactionsTableProps = {
@@ -20,11 +13,6 @@ type TransactionsTableProps = {
   caption: string;
   onToggleSort: (key: TransactionSortKey) => void;
   onRequestDelete: (id: string, triggerId: string) => void;
-};
-
-const ARIA_SORT_DIRECTIONS: Record<SortDirection, TableSortDirection> = {
-  asc: "ascending",
-  desc: "descending",
 };
 
 export function TransactionsTable({
@@ -37,7 +25,7 @@ export function TransactionsTable({
 }: TransactionsTableProps) {
   function headerSort(key: TransactionSortKey) {
     return {
-      direction: sort.key === key ? ARIA_SORT_DIRECTIONS[sort.dir] : null,
+      direction: headerSortDirection(sort, key),
       onToggle: () => onToggleSort(key),
     };
   }

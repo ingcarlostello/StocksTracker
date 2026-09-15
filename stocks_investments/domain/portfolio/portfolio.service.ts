@@ -1,9 +1,5 @@
-import { SHARES_EPSILON } from "./portfolio.constants";
+import { isOpenPosition } from "./position.service";
 import type { Holding, PortfolioSummary, Position, PriceMap } from "./portfolio.type";
-
-function isOpen(position: Position): boolean {
-  return position.shares > SHARES_EPSILON;
-}
 
 function openAverageCost(position: Position): number {
   return position.costBasis / position.shares;
@@ -18,7 +14,7 @@ export function totalInvested(position: Position): number {
 }
 
 export function averageCost(position: Position): number | null {
-  return isOpen(position) ? openAverageCost(position) : null;
+  return isOpenPosition(position) ? openAverageCost(position) : null;
 }
 
 export function currentValue(position: Position, price: number): number {
@@ -39,7 +35,7 @@ function priceFor(prices: PriceMap, ticker: string): number | null {
 
 // Closed positions (no shares left) are not holdings.
 export function openPositions(positions: readonly Position[]): Position[] {
-  return positions.filter(isOpen);
+  return positions.filter(isOpenPosition);
 }
 
 export function buildHoldings(positions: readonly Position[], prices: PriceMap): Holding[] {

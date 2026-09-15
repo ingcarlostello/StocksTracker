@@ -14,3 +14,10 @@ export const PORTFOLIO_NAME_MESSAGES = {
 } as const;
 
 export const NO_PORTFOLIOS_MESSAGE = "You don't have any portfolios yet. Create one to start adding transactions.";
+
+export const PORTFOLIO_VIEW_MESSAGES = {
+  LOADING: "Loading portfolio…",
+  // Shared by "never traded in this scope" and "every position sold".
+  NO_HOLDINGS: "No holdings yet. Add a transaction to see your portfolio.",
+  TOTALS_WAITING_FOR_PRICES: "Totals appear once prices load.",
+} as const;

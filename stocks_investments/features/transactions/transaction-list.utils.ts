@@ -4,9 +4,10 @@ import type { TransactionLike } from "@/domain/transactions/transaction.type";
 import { formatIsoDate } from "@/utils/date-format.utils";
 import { isIsoDate } from "@/utils/date.utils";
 import { formatCurrency, formatShares, formatSharesExact } from "@/utils/number-format.utils";
+import { compareValues, sortedTableCaption } from "@/utils/sort.utils";
 import { TRANSACTION_TYPE_LABELS } from "./transaction-form.constants";
 import { dateRangeError, editTransactionHref } from "./transaction-list-query.utils";
-import { SORT_DIRECTION_LABELS, TRANSACTION_COLUMN_LABELS, UNKNOWN_PORTFOLIO_NAME } from "./transaction-list.constants";
+import { TRANSACTION_COLUMN_LABELS, UNKNOWN_PORTFOLIO_NAME } from "./transaction-list.constants";
 import type {
   EffectiveSort,
   TransactionListQuery,
@@ -43,10 +44,6 @@ export function filterTransactions<T extends TransactionLike>(transactions: read
       (query.type === "all" || transaction.type === (query.type === "buy" ? "BUY" : "SELL")) &&
       isWithinDateRange(transaction.date, query.from, query.to),
   );
-}
-
-function compareValues(a: number | string, b: number | string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 // Ascending comparison by a non-date key; 0 on a tie.
@@ -149,5 +146,5 @@ export function listSummary(visibleCount: number, totalCount: number): string {
 }
 
 export function scopeCaption(scopeLabel: string, sort: EffectiveSort): string {
-  return `Transactions in ${scopeLabel}, sorted by ${TRANSACTION_COLUMN_LABELS[sort.key]} ${SORT_DIRECTION_LABELS[sort.dir]}`;
+  return sortedTableCaption("Transactions", scopeLabel, TRANSACTION_COLUMN_LABELS[sort.key], sort.dir);
 }

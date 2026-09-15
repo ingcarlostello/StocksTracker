@@ -16,6 +16,17 @@ export function emptyPosition(ticker: string): Position {
   return { ticker, shares: 0, costBasis: 0, realizedGain: 0 };
 }
 
+// Open means more than SHARES_EPSILON shares; the single threshold predicate for the domain.
+export function isOpenPosition(position: Pick<Position, "shares">): boolean {
+  return position.shares > SHARES_EPSILON;
+}
+
+// A BUY never snaps to zero, so a sub-epsilon buy can leave dust. Settling it before combining keeps
+// another portfolio's dust out of the combined position; the realized gain is history and is kept.
+function settleClosedPosition(position: Position): Position {
+  return isOpenPosition(position) ? position : { ...position, shares: 0, costBasis: 0 };
+}
+
 // Selling from a closed position is always an oversell, however small the quantity.
 function isOversell(position: Position, quantity: number): boolean {
   return position.shares <= SHARES_EPSILON || quantity > position.shares + SHARES_EPSILON;
@@ -111,7 +122,8 @@ export function combinePositions(positions: readonly Position[]): Position[] {
 }
 
 // Replays each (portfolio, ticker) pair in canonical order, so average cost and oversell checks never
-// borrow shares from another portfolio; then combines same-ticker positions across portfolios.
+// borrow shares from another portfolio; then settles each closed pair (shares 0, costBasis 0) and combines
+// same-ticker positions across portfolios, so the combined view is the sum of the individual views.
 // Throws OversellError at the first SELL, in canonical order, that needs more shares than its portfolio held.
 export function buildPositions(transactions: readonly TransactionLike[]): Position[] {
   const positions = new Map<string, Position>();
@@ -122,7 +134,7 @@ export function buildPositions(transactions: readonly TransactionLike[]): Positi
     positions.set(key, applyTransaction(current, transaction));
   }
 
-  return combinePositions([...positions.values()]);
+  return combinePositions([...positions.values()].map(settleClosedPosition));
 }
 
 // Non-throwing replay for callers that must render an invalid history instead of crashing.

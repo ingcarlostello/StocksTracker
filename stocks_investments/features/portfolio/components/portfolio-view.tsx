@@ -2,17 +2,17 @@
 
 import { ROUTES } from "@/constants/routes.constants";
 import { PriceStatus } from "@/features/market-data/components/price-status";
-import { formatIsoDate } from "@/utils/date-format.utils";
-import { formatSharesExact } from "@/utils/number-format.utils";
-import { usePortfolio } from "../hooks/use-portfolio.hook";
-import { HoldingsPreview } from "./holdings-preview";
+import { usePortfolioView } from "../hooks/use-portfolio-view.hook";
+import { PORTFOLIO_VIEW_MESSAGES } from "../portfolio-messages.constants";
+import { HoldingsTable } from "./holdings-table";
 import { NoPortfoliosNotice } from "./no-portfolios-notice";
+import { PortfolioTotals } from "./portfolio-totals";
 
 export function PortfolioView() {
-  const state = usePortfolio();
+  const state = usePortfolioView();
 
   if (state.status === "loading") {
-    return <p className="text-sm text-muted">Loading portfolio…</p>;
+    return <p className="text-sm text-muted">{PORTFOLIO_VIEW_MESSAGES.LOADING}</p>;
   }
 
   if (state.status === "no-portfolios") {
@@ -20,31 +20,36 @@ export function PortfolioView() {
   }
 
   if (state.status === "invalid-history") {
-    const { ticker, date, available, requested } = state.violation;
     return (
       <p role="alert" className="rounded-lg border border-negative/40 bg-sell-tint p-4 text-sm text-foreground">
-        Your history sells {formatSharesExact(requested)} {ticker} on {formatIsoDate(date)}, but only{" "}
-        {formatSharesExact(available)} shares were held then. Fix that transaction to see your portfolio.
+        {state.message}
       </p>
     );
   }
 
-  const { holdings, summary, prices } = state;
+  if (state.status === "empty") {
+    return (
+      <p className="rounded-lg border border-border bg-surface p-6 text-sm text-muted">
+        {PORTFOLIO_VIEW_MESSAGES.NO_HOLDINGS}
+      </p>
+    );
+  }
+
+  const { prices, table, totals } = state;
   return (
     <div className="flex flex-col gap-6">
-      {holdings.length > 0 ? (
-        <PriceStatus
-          asOfDate={prices.asOfDate}
-          lastUpdatedAt={prices.lastUpdatedAt}
-          missing={prices.missing}
-          isPending={prices.isPending}
-          isFetching={prices.isFetching}
-          errorMessage={prices.errorMessage}
-          canRefresh={prices.canRefresh}
-          onRefresh={prices.refresh}
-        />
-      ) : null}
-      <HoldingsPreview holdings={holdings} summary={summary} />
+      <PriceStatus
+        asOfDate={prices.asOfDate}
+        lastUpdatedAt={prices.lastUpdatedAt}
+        missing={prices.missing}
+        isPending={prices.isPending}
+        isFetching={prices.isFetching}
+        errorMessage={prices.errorMessage}
+        canRefresh={prices.canRefresh}
+        onRefresh={prices.refresh}
+      />
+      <HoldingsTable rows={table.rows} sort={table.sort} caption={table.caption} onToggleSort={table.toggleSort} />
+      <PortfolioTotals totals={totals} />
     </div>
   );
 }
