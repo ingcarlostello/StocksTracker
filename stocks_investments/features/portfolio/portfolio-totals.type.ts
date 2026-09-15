@@ -12,3 +12,8 @@ export type PortfolioTotalsModel = {
   // Why Market Value and Gain are withheld; null when complete.
   note: string | null;
 };
+
+// Why value, gain and return are withheld; see withheldTotalsReason.
+export type WithheldTotalsReason =
+  | { kind: "waiting-for-prices" }
+  | { kind: "missing-prices"; tickers: readonly string[] };

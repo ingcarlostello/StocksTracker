@@ -27,13 +27,21 @@ export function usePortfolio(): PortfolioState {
   const holdings = useMemo(() => buildHoldings(positions, prices.prices), [positions, prices.prices]);
   const summary = useMemo(() => summarizePortfolio(holdings), [holdings]);
 
-  if (activePortfolio.status === "loading" || replay === undefined) return { status: "loading" };
+  // replay is undefined exactly when transactions is; both are checked because TypeScript cannot narrow
+  // transactions through the memo.
+  if (activePortfolio.status === "loading" || transactions === undefined || replay === undefined) {
+    return { status: "loading" };
+  }
   if (activePortfolio.portfolios.length === 0) return { status: "no-portfolios" };
   if (!replay.ok) return { status: "invalid-history", violation: replay.violation };
   return {
     status: "ready",
     // Narrowed: the loading status returned above.
     active: activePortfolio.active,
+    // The same memoized array the positions were replayed from (canonical ascending).
+    transactions,
+    // Memoized in usePortfolios; used for portfolio names in "All portfolios".
+    portfolios: activePortfolio.portfolios,
     holdings,
     summary,
     prices,

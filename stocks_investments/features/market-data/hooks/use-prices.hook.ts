@@ -45,7 +45,8 @@ export function usePrices(symbols: readonly string[]): PricesState {
     lastUpdatedAt: query.data && !query.isPlaceholderData ? query.dataUpdatedAt : null,
     canRefresh: hasSymbols && !query.isFetching && !isCoolingDown,
     refresh: () => {
-      void query.refetch();
+      // A second trigger while a refresh is in flight reuses it; cancelling would not stop the HTTP request (no AbortSignal).
+      void query.refetch({ cancelRefetch: false });
     },
   };
 }

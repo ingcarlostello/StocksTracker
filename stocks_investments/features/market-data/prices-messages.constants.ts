@@ -10,3 +10,8 @@ export const PRICES_ERROR_MESSAGES: Record<PricesErrorCode, string> = {
   NETWORK_ERROR: "Could not connect. Check your internet connection.",
   INVALID_RESPONSE: "Received an unexpected price response.",
 };
+
+export const PRICE_STATUS_MESSAGES = {
+  LOADING: "Loading prices…",
+  NOT_LOADED: "Prices not loaded",
+} as const;

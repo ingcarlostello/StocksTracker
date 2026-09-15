@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildHoldings, summarizePortfolio } from "@/domain/portfolio/portfolio.service";
 import type { Holding, PortfolioSummary } from "@/domain/portfolio/portfolio.type";
 import { toHoldingRows } from "./holdings-table.utils";
-import { toPortfolioTotals } from "./portfolio-totals.utils";
+import { toPortfolioTotals, withheldTotalsReason } from "./portfolio-totals.utils";
 
 const idle = { isPending: false, isFetching: false };
 
@@ -106,5 +106,29 @@ describe("toPortfolioTotals", () => {
     const totals = toPortfolioTotals(summarizePortfolio(holdings), idle);
     expect(totals.marketValueLabel).toBe("$3.01");
     expect(totals.gainLoss).toEqual({ label: "+$0.01", sign: "positive" });
+  });
+});
+
+describe("withheldTotalsReason", () => {
+  const fetching = { isPending: false, isFetching: true };
+
+  it("withholds nothing when every holding has a price", () => {
+    const complete = summary(1000, 1000, 0, 0, []);
+    expect(withheldTotalsReason(complete, idle)).toBeNull();
+    expect(withheldTotalsReason(complete, fetching)).toBeNull();
+  });
+
+  it("names the tickers without a price once prices are settled", () => {
+    expect(withheldTotalsReason(MISSING_PRICES, idle)).toEqual({ kind: "missing-prices", tickers: ["MSFT", "TSLA"] });
+  });
+
+  it("waits while prices are fetching", () => {
+    expect(withheldTotalsReason(MISSING_PRICES, fetching)).toEqual({ kind: "waiting-for-prices" });
+  });
+
+  it("waits for a paused offline query", () => {
+    expect(withheldTotalsReason(MISSING_PRICES, { isPending: true, isFetching: false })).toEqual({
+      kind: "waiting-for-prices",
+    });
   });
 });

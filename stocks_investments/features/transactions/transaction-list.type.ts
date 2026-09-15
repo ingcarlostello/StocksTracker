@@ -41,6 +41,12 @@ export type TransactionRow = {
   actionsId: string;
 };
 
+// The cells every transactions table renders (/transactions and the dashboard's Recent Transactions).
+export type TransactionCellsRow = Pick<
+  TransactionRow,
+  "type" | "dateLabel" | "ticker" | "portfolioName" | "sharesLabel" | "priceLabel" | "totalLabel"
+>;
+
 export type TransactionSummary = {
   type: TransactionType;
   ticker: string;

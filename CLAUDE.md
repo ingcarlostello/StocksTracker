@@ -219,7 +219,33 @@ Progress:
     - Break-even shows neutral colors, dust in two portfolios shows nowhere, and the empty state renders.
     - The `/transactions` sort and its URL round-trip still work.
   - **Accepted limits.** Displayed row labels can differ from the totals by cents. During a Refresh with a still-missing ticker, the totals note reads "Totals appear once prices load." until the fetch ends. The ZZZZ test ticker left a write-once `dailyCloses` null row.
-- Not yet: dashboard and performance screens (Phases 11–12), responsive layout and UI states (Phase 13).
+- **Phase 11 (/dashboard) done.** Convex schema, functions and domain are unchanged.
+  - **Screen.** `app/dashboard/page.tsx` stays a static Server Component (`○ /dashboard`) that mounts `DashboardView`, the only client boundary. `DashboardView` renders `PageHeader` itself so the price label (`PriceStatusLabel`) and `RefreshPricesButton` sit in the header actions. Below the header, in order:
+    - price alerts, then `SummaryCards` (4 `StatCard`s in a `<dl>`: Portfolio Value, Total Invested, Total Gain / Loss, Portfolio Return);
+    - "Holdings" (`HoldingsTable`);
+    - "Recent Transactions" (latest 3 with "View all >" to `/transactions`).
+  - **User decisions (2026-09-15).**
+    - Dashboard Holdings are identical to `/portfolio`: same `HoldingsTable`, sortable, with "⋯" and no new props.
+    - The Total Gain / Loss card shows only the signed amount; Portfolio Return shows the signed %.
+  - **Data flow.** `useDashboard` = `usePortfolio` (the single source; its ready state gained `transactions` and `portfolios`) + `usePortfolioHoldingsTable` (shared with `usePortfolioView`) + a memoized `selectRecentTransactions`. The pure `buildDashboardView` (`features/dashboard/dashboard-view.utils.ts`) maps it to `DashboardState`, reusing `blockedPortfolioView` for loading / no-portfolios / invalid-history. With no open holdings, no price label, Refresh or alerts are shown, because a disabled TanStack query can still hold placeholder data. Cards read $0.00 / $0.00 / $0.00 / — and the Holdings section shows "No holdings yet…".
+  - **Cards** come from `toPortfolioTotals` (`toSummaryCards`), so they equal `/portfolio`'s totals by construction. The note reason is the shared `withheldTotalsReason`. The dashboard wording is "…so Portfolio Value, Total Gain / Loss and Portfolio Return can't be calculated."; `/portfolio` keeps "can't be totaled".
+  - **Recent Transactions** are the reversed canonical order `(date, createdAt, id)`, limit `RECENT_TRANSACTIONS_LIMIT` (3). They follow trade date, so a back-dated trade entered today is not "recent". Rows are `toTransactionRows` trimmed to the rendered cells, with a Portfolio column only in "All portfolios".
+  - **Shared pieces extracted, no behavior change:**
+    - `PriceStatus` is now composed of `PriceStatusLabel`, `RefreshPricesButton` and `PriceAlerts`, with its text in `price-status.utils.ts` (`priceStatusLabel`, `missingClosesMessage`).
+    - `features/transactions/components/transaction-columns.tsx` (`TransactionColumnHeaders`, sortable only with `sorting`, and `TransactionRowCells`) is used by `TransactionsTable` and the read-only `RecentTransactionsTable`.
+    - `components/ui/stat-card.tsx`.
+  - **Phase 7 amendment (my decision, objectable).** `usePrices().refresh` calls `refetch({ cancelRefetch: false })`. Before, two clicks in the same task (before the button re-rendered disabled) cancelled and restarted the fetch, but the first HTTP request kept running (no `AbortSignal`): 2 requests, measured in the browser. Now it is 1. Revert path: the one line in `use-prices.hook.ts`.
+  - **Tests (710).** New pure tests for the cards model, recent selection (ties, limit, back-dated), row model, state machine, price-status text and the shared portfolio mappers.
+  - **Verification.** A design panel (3 designs, 2 judges, critic), a 4-package implementation, and an adversarial review of 3 dimensions: 0 findings. Browser-verified with Playwright:
+    - 1 `/api/prices` on open and 1 per Refresh, including a double click.
+    - The cards match a hand computation and `/portfolio`'s totals.
+    - Holdings JSON is identical to `/portfolio`, and Recent equals the first 3 rows of `/transactions`, in a single portfolio and in "All".
+    - Sort persistence and reset, "⋯" and "View all" links.
+    - 429 cooldown, 503, held request and missing-ticker states; sold-out and empty portfolios.
+    - 4 cards in one row at 1440px.
+    - A pre-change DOM baseline of `/portfolio` (price block, totals, table, missing note) and `/transactions` (thead, rows) matched 18/18 hashes after the change.
+  - **Accepted limits.** Stat cards wrap to 2×2 below 1280px (Phase 13). The header label keeps the full "Close of … · updated …" text. Invalid history hides Recent Transactions too.
+- Not yet: performance screen (Phase 12), responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`
 
