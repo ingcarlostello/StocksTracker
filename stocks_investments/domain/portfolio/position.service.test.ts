@@ -14,6 +14,7 @@ import {
   findCandidateOversell,
   findRemovalOversell,
   findUpdateOversell,
+  isOpenPosition,
   sellCostBasis,
   tryBuildPositions,
   validateSellSequence,
@@ -86,6 +87,14 @@ describe("applyTransaction", () => {
         requested: 3,
       });
     }
+  });
+});
+
+describe("isOpenPosition", () => {
+  it("uses SHARES_EPSILON as the threshold", () => {
+    expect(isOpenPosition({ shares: 0 })).toBe(false);
+    expect(isOpenPosition({ shares: SHARES_EPSILON })).toBe(false);
+    expect(isOpenPosition({ shares: 1.0000001e-9 })).toBe(true);
   });
 });
 
@@ -329,6 +338,36 @@ describe("positions across portfolios", () => {
     ]);
     expect(position.shares).toBe(2);
     expect(position.costBasis).toBe(1000);
+  });
+
+  it("settles sub-epsilon leftovers of each portfolio before combining", () => {
+    const tx = makeFactory();
+    // Each 6e-10 buy is dust on its own, but together they would exceed SHARES_EPSILON.
+    const positions = buildPositions([
+      tx("BUY", "AAPL", 6e-10, 100, "2025-01-02", PORTFOLIO),
+      tx("BUY", "AAPL", 6e-10, 100, "2025-01-02", OTHER_PORTFOLIO),
+    ]);
+    expect(positions).toEqual([{ ticker: "AAPL", shares: 0, costBasis: 0, realizedGain: 0 }]);
+  });
+
+  it("never lets another portfolio's dust leak into a combined position", () => {
+    const tx = makeFactory();
+    const [position] = buildPositions([
+      tx("BUY", "AAPL", 5e-10, 1e6, "2025-01-02", PORTFOLIO),
+      tx("BUY", "AAPL", 10, 100, "2025-01-02", OTHER_PORTFOLIO),
+    ]);
+    expect(position.shares).toBe(10);
+    expect(position.costBasis).toBe(1000);
+  });
+
+  it("keeps the realized gain of a settled position", () => {
+    const tx = makeFactory();
+    const positions = buildPositions([
+      tx("BUY", "AAPL", 1, 100, "2025-01-02"),
+      tx("SELL", "AAPL", 1, 150, "2025-01-03"),
+      tx("BUY", "AAPL", 5e-10, 100, "2025-01-04"),
+    ]);
+    expect(positions).toEqual([{ ticker: "AAPL", shares: 0, costBasis: 0, realizedGain: 50 }]);
   });
 
   it("ignores another portfolio's shares in the candidate check", () => {

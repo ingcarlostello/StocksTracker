@@ -30,5 +30,12 @@ export function usePortfolio(): PortfolioState {
   if (activePortfolio.status === "loading" || replay === undefined) return { status: "loading" };
   if (activePortfolio.portfolios.length === 0) return { status: "no-portfolios" };
   if (!replay.ok) return { status: "invalid-history", violation: replay.violation };
-  return { status: "ready", holdings, summary, prices };
+  return {
+    status: "ready",
+    // Narrowed: the loading status returned above.
+    active: activePortfolio.active,
+    holdings,
+    summary,
+    prices,
+  };
 }

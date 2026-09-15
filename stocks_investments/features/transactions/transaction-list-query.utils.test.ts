@@ -11,6 +11,7 @@ import {
   parseTransactionListQuery,
   reconcileUrlQuery,
   serializeTransactionListQuery,
+  tickerTransactionsHref,
   toggleSort,
   transactionsListHref,
 } from "./transaction-list-query.utils";
@@ -107,6 +108,16 @@ describe("hrefs", () => {
   it("encodes the id and carries the list query to the edit page", () => {
     expect(editTransactionHref("a b", "type=sell")).toBe("/transactions/a%20b/edit?type=sell");
     expect(editTransactionHref("abc", "")).toBe("/transactions/abc/edit");
+  });
+
+  it("links to the list filtered by one ticker", () => {
+    expect(tickerTransactionsHref("AAPL")).toBe("/transactions?ticker=AAPL");
+    expect(tickerTransactionsHref("BRK.B")).toBe("/transactions?ticker=BRK.B");
+    expect(tickerTransactionsHref(" aapl ")).toBe("/transactions?ticker=AAPL");
+  });
+
+  it("round-trips through the list parser", () => {
+    expect(parse(tickerTransactionsHref("BRK.B").split("?")[1])).toEqual(query({ ticker: "BRK.B" }));
   });
 });
 

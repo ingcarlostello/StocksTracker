@@ -192,7 +192,34 @@ Progress:
     - There is no server compare-and-swap for concurrent edits; the banner covers what the client can see. Revisit in Phase 15.
     - Add Transaction still returns to an unfiltered list.
     - Focus can drop to `<body>` when the confirm button disables or disappears inside the dialog (Phase 13).
-- Not yet: full portfolio/dashboard/performance screens (Phases 10–12), responsive layout and UI states (Phase 13).
+- **Phase 10 (/portfolio) done.** Convex schema and functions are unchanged.
+  - **Screen.** `PortfolioView` (`usePortfolioView`) renders `PriceStatus`, then `HoldingsTable` (Ticker, Shares, Avg. Cost, Current Price, Market Value, Gain / Loss, %, "⋯"), then the `PortfolioTotals` card, for the active portfolio. Non-ready states keep their Phase 7 markup and text: loading, no portfolios, invalid history, and a single "No holdings yet…" message for both "never traded" and "everything sold".
+  - **User decisions (2026-09-14).**
+    - The "⋯" menu has one item, "View transactions" → `tickerTransactionsHref(ticker)` (`/transactions?ticker=AAPL`). The list filter is a prefix match, so "F" also lists "FB" (accepted).
+    - Headers are sortable with local state (`useHoldingsTable`), not in the URL. Initial sort is Ticker A→Z. Numbers start largest first. Missing values go last and ties break by ticker, in both directions. The sort survives scope switches and refreshes and resets on navigation.
+  - **Pure layer** (`features/portfolio/`):
+    - `holdings-table.{type,constants,utils}.ts`: `sortHoldings` on raw values, `toHoldingRows` with pre-formatted labels, `holdingsCaption`. The `%` header's accessible name is "Return %".
+    - `portfolio-totals.utils.ts`: `toPortfolioTotals`. Market Value and Gain show "—" while any price is missing, with the note "Totals appear once prices load." while `isPending || isFetching`, otherwise "No price for …".
+    - `portfolio-view.utils.ts`: `invalidHistoryMessage`.
+    - `usePortfolio`'s ready state now also carries `active`.
+  - **Shared helpers extracted from Phase 9, no behavior change:**
+    - `types/sort.type.ts` (`SortDirection`, `SortState`)
+    - `utils/sort.utils.ts` (`compareValues`, `toggleSortState`, `sortedDirection`, `sortedTableCaption`)
+    - `constants/sort.constants.ts`
+    - `components/ui/table-sort.utils.ts` (`headerSortDirection`, the aria-sort token map)
+    - `activePortfolioScopeLabel`
+  - **Green/red.** `signedCurrencyLabel`/`signedPercentLabel` (`utils/number-format.utils.ts`) return `{ label, sign }`, with the sign read from `formatToParts` of the same formatter, so the color always matches the rounded text ("$0.00" is neutral). `SignedValue` (`components/ui/`) renders it; `NOT_AVAILABLE_LABEL` ("—") is in `constants/format.constants.ts`. Phase 11 stat cards should reuse both.
+  - **Domain fix.** `buildPositions` now settles each (portfolio, ticker) position at or below `SHARES_EPSILON` to `shares 0, costBasis 0` (realized gain kept) before `combinePositions`. Before, sub-epsilon buys in two portfolios could add up to an "All portfolios" holding that no single portfolio showed. `isOpenPosition` is the single threshold predicate. Oversell semantics are unchanged, and the change reaches the Convex bundle (pushed with `npx convex dev --once`).
+  - **Tests (613).** The three plan verifications are domain tests in `portfolio.service.test.ts`: multi-ticker never mixed (F/FB, BRK.B/BRKB), rows reconcile with totals, and combined view = sum of the individual views, including a seeded property test that fails without the settle step.
+  - **Verification.** A design panel (3 designs, 2 judges, critic), a 4-package implementation, and an adversarial review of 3 dimensions with 2 skeptics per finding: 0 confirmed. Browser-verified with Playwright:
+    - The combined view equals the sum of Pension + two test portfolios, to the cent.
+    - Sorting: keyboard, aria-sort and caption; persists across scopes; resets on navigation; no requests.
+    - The "⋯" menu opens up or down, closes with Escape and returns focus, and its link keeps the active portfolio.
+    - Price states: missing price, held request, and a 503.
+    - Break-even shows neutral colors, dust in two portfolios shows nowhere, and the empty state renders.
+    - The `/transactions` sort and its URL round-trip still work.
+  - **Accepted limits.** Displayed row labels can differ from the totals by cents. During a Refresh with a still-missing ticker, the totals note reads "Totals appear once prices load." until the fetch ends. The ZZZZ test ticker left a write-once `dailyCloses` null row.
+- Not yet: dashboard and performance screens (Phases 11–12), responsive layout and UI states (Phase 13).
 
 ## Agent instruction files in `stocks_investments/`
 

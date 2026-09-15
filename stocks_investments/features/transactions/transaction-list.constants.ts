@@ -1,6 +1,7 @@
 import type { SelectOption } from "@/components/ui/select-field";
+import type { SortDirection } from "@/types/sort.type";
 import { TRANSACTION_TYPE_LABELS } from "./transaction-form.constants";
-import type { SortDirection, TransactionListQuery, TransactionSortKey } from "./transaction-list.type";
+import type { TransactionListQuery, TransactionSortKey } from "./transaction-list.type";
 
 export const LIST_QUERY_PARAMS: Readonly<Record<keyof TransactionListQuery, string>> = {
   ticker: "ticker",
@@ -61,11 +62,6 @@ export const TRANSACTION_COLUMN_LABELS: Readonly<Record<TransactionSortKey, stri
   shares: "Shares",
   price: "Price",
   total: "Total",
-};
-
-export const SORT_DIRECTION_LABELS: Readonly<Record<SortDirection, string>> = {
-  asc: "ascending",
-  desc: "descending",
 };
 
 // Shown when a transaction's portfolio is not among the loaded portfolios.

@@ -9,6 +9,8 @@ import {
   formatSignedCurrency,
   formatSignedPercent,
   formatTrimmedDecimal,
+  signedCurrencyLabel,
+  signedPercentLabel,
 } from "./number-format.utils";
 
 describe("formatCurrency", () => {
@@ -159,5 +161,82 @@ describe("formatSignedPercent", () => {
     [-1.9e-16, "0.00%"],
   ])("%s → %s", (ratio, expected) => {
     expect(formatSignedPercent(ratio)).toBe(expected);
+  });
+});
+
+const SIGNED_CURRENCY_CASES = [
+  [393.2, "+$393.20", "positive"],
+  [-60, "-$60.00", "negative"],
+  [0, "$0.00", "zero"],
+  [-0, "$0.00", "zero"],
+  [-5.7e-14, "$0.00", "zero"],
+  [-0.004, "$0.00", "zero"],
+  [-0.005, "-$0.01", "negative"],
+  [0.005, "+$0.01", "positive"],
+  // Math.round(1.005 * 100) / 100 would say 1.00.
+  [1.005, "+$1.01", "positive"],
+  [2.675, "+$2.68", "positive"],
+] as const;
+
+const SIGNED_PERCENT_CASES = [
+  [1 / 3, "+33.33%", "positive"],
+  [-0.2, "-20.00%", "negative"],
+  [0, "0.00%", "zero"],
+  [-1.9e-16, "0.00%", "zero"],
+  [0.00001, "0.00%", "zero"],
+  [-0.00004, "0.00%", "zero"],
+  [0.00005, "+0.01%", "positive"],
+  [-0.00005, "-0.01%", "negative"],
+] as const;
+
+// The sign a reader sees in the text.
+function signOfText(label: string): string {
+  return label.startsWith("+") ? "positive" : label.startsWith("-") ? "negative" : "zero";
+}
+
+describe("signedCurrencyLabel", () => {
+  it.each(SIGNED_CURRENCY_CASES)("%s → %s (%s)", (value, label, sign) => {
+    expect(signedCurrencyLabel(value)).toEqual({ label, sign });
+  });
+});
+
+describe("signedPercentLabel", () => {
+  it.each(SIGNED_PERCENT_CASES)("%s → %s (%s)", (ratio, label, sign) => {
+    expect(signedPercentLabel(ratio)).toEqual({ label, sign });
+  });
+});
+
+describe("signed labels", () => {
+  it("labels equal formatSignedCurrency / formatSignedPercent", () => {
+    for (const [value] of SIGNED_CURRENCY_CASES) {
+      expect(signedCurrencyLabel(value).label).toBe(formatSignedCurrency(value));
+    }
+    for (const [ratio] of SIGNED_PERCENT_CASES) {
+      expect(signedPercentLabel(ratio).label).toBe(formatSignedPercent(ratio));
+    }
+  });
+
+  it("sign matches the displayed text for seeded values", () => {
+    const random = seededRandom(42);
+    const values: number[] = [];
+    for (let i = 0; i < 2_000; i += 1) {
+      const magnitude = Math.exp((random() * 2 - 1) * 12);
+      values.push(random() < 0.5 ? -magnitude : magnitude);
+    }
+    // Values next to the rounding boundaries of cents and hundredths of a percent.
+    for (const [boundary, nudge] of [
+      [0.005, 1e-12],
+      [0.00005, 1e-15],
+    ]) {
+      values.push(boundary + nudge, boundary - nudge, -boundary + nudge, -boundary - nudge);
+    }
+
+    const failures: string[] = [];
+    for (const value of values) {
+      for (const { label, sign } of [signedCurrencyLabel(value), signedPercentLabel(value)]) {
+        if (sign !== signOfText(label)) failures.push(`${value} → ${label} (${sign})`);
+      }
+    }
+    expect(failures).toEqual([]);
   });
 });

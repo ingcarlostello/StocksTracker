@@ -1,10 +1,9 @@
 import type { TransactionType } from "@/domain/transactions/transaction.type";
+import type { SortDirection, SortState } from "@/types/sort.type";
 
 export type TransactionTypeFilter = "all" | "buy" | "sell";
 
 export type TransactionSortKey = "date" | "type" | "ticker" | "portfolio" | "shares" | "price" | "total";
-
-export type SortDirection = "asc" | "desc";
 
 // Filters and sort saved in the URL. In the draft `ticker` is raw text; in a parsed or applied query it is normalized.
 export type TransactionListQuery = {
@@ -18,7 +17,7 @@ export type TransactionListQuery = {
 };
 
 // The sort actually applied, e.g. date while a portfolio sort is saved but its column is hidden.
-export type EffectiveSort = { key: TransactionSortKey; dir: SortDirection };
+export type EffectiveSort = SortState<TransactionSortKey>;
 
 // URL queries seen and written by the list, so a delayed commit of an older write never rolls the draft back.
 export type UrlSyncState = { seenUrl: string; pendingWrites: readonly string[] };

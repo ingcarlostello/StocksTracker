@@ -1,7 +1,9 @@
 import { ROUTES } from "@/constants/routes.constants";
 import { normalizeTicker } from "@/domain/transactions/transaction-validation.service";
+import type { SortDirection } from "@/types/sort.type";
 import { isIsoDate } from "@/utils/date.utils";
 import { withQuery } from "@/utils/route.utils";
+import { toggleSortState } from "@/utils/sort.utils";
 import {
   DEFAULT_LIST_QUERY,
   LIST_QUERY_KEY_ORDER,
@@ -12,7 +14,6 @@ import {
 } from "./transaction-list.constants";
 import type {
   EffectiveSort,
-  SortDirection,
   TransactionListQuery,
   TransactionSortKey,
   TransactionTypeFilter,
@@ -87,9 +88,14 @@ export function editTransactionHref(id: string, queryString: string): string {
   return withQuery(`${ROUTES.TRANSACTIONS}/${encodeURIComponent(id)}/edit`, queryString);
 }
 
+// List filtered to one ticker. The filter is a prefix match, so "F" also lists "FB" (accepted).
+export function tickerTransactionsHref(ticker: string): string {
+  return transactionsListHref({ ...DEFAULT_LIST_QUERY, ticker });
+}
+
 export function toggleSort(query: TransactionListQuery, key: TransactionSortKey): TransactionListQuery {
-  if (query.sort === key) return { ...query, dir: query.dir === "asc" ? "desc" : "asc" };
-  return { ...query, sort: key, dir: SORT_DEFAULT_DIRECTION[key] };
+  const next = toggleSortState({ key: query.sort, dir: query.dir }, key, SORT_DEFAULT_DIRECTION);
+  return { ...query, sort: next.key, dir: next.dir };
 }
 
 // A portfolio sort stays saved while its column is hidden, but the rows fall back to newest first.

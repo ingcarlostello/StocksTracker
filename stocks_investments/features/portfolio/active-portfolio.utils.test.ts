@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ALL_PORTFOLIOS_VALUE } from "./active-portfolio.constants";
-import { activePortfolioValue, resolveActivePortfolio, scopeOfActivePortfolio } from "./active-portfolio.utils";
+import {
+  activePortfolioScopeLabel,
+  activePortfolioValue,
+  resolveActivePortfolio,
+  scopeOfActivePortfolio,
+} from "./active-portfolio.utils";
 
 const retiro = { id: "p1" as Id<"portfolios">, name: "Retiro", createdAt: 1 };
 const viajes = { id: "p2" as Id<"portfolios">, name: "Viajes", createdAt: 2 };
@@ -30,5 +35,15 @@ describe("scope and selector value", () => {
   it("maps the combined view", () => {
     expect(scopeOfActivePortfolio({ kind: "all" })).toEqual({ kind: "all" });
     expect(activePortfolioValue({ kind: "all" })).toBe(ALL_PORTFOLIOS_VALUE);
+  });
+});
+
+describe("activePortfolioScopeLabel", () => {
+  it("labels the combined view in lowercase", () => {
+    expect(activePortfolioScopeLabel({ kind: "all" })).toBe("all portfolios");
+  });
+
+  it("labels a single portfolio by its name", () => {
+    expect(activePortfolioScopeLabel({ kind: "portfolio", portfolio: retiro })).toBe("Retiro");
   });
 });

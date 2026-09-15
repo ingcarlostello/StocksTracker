@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { TransactionLike } from "@/domain/transactions/transaction.type";
-import { ALL_PORTFOLIOS_LABEL } from "@/features/portfolio/active-portfolio.constants";
+import { activePortfolioScopeLabel } from "@/features/portfolio/active-portfolio.utils";
 import { useActivePortfolio } from "@/features/portfolio/hooks/use-active-portfolio.hook";
 import { portfolioNamesById } from "@/features/portfolio/portfolio-list.utils";
 import type { PortfolioOption } from "@/features/portfolio/portfolio-selection.type";
@@ -78,11 +78,10 @@ export function useTransactionsTable() {
   } else if (transactions === undefined) {
     state = { status: "loading" };
   } else {
-    const { active } = activePortfolio;
     state = {
       status: "ready",
       scopeKey: activePortfolio.selectedValue,
-      caption: scopeCaption(active.kind === "all" ? ALL_PORTFOLIOS_LABEL.toLowerCase() : active.portfolio.name, sort),
+      caption: scopeCaption(activePortfolioScopeLabel(activePortfolio.active), sort),
       showPortfolioColumn,
       sort,
       transactions,

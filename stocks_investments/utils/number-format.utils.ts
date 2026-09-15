@@ -4,6 +4,7 @@ import {
   PERCENT_DECIMALS,
   SHARES_DECIMALS,
 } from "../constants/format.constants";
+import type { DisplaySign, SignedLabel } from "../types/display-sign.type";
 
 const currency = new Intl.NumberFormat(DISPLAY_LOCALE, {
   style: "currency",
@@ -110,4 +111,33 @@ export function formatExactDecimal(value: number, minFractionDigits = 0): string
 // Takes a ratio: 1/3 → "+33.33%".
 export function formatSignedPercent(ratio: number): string {
   return signedPercent.format(ratio);
+}
+
+// The sign comes from the formatted parts, so the color always agrees with the rounded text:
+// 1.005 → "+$1.01" is positive, while Math.round(1.005 * 100) would give 1.
+function signedLabel(format: Intl.NumberFormat, value: number): SignedLabel {
+  const parts = format.formatToParts(value);
+  // exceptZero prints no sign part for a value that rounds to zero.
+  let sign: DisplaySign = "zero";
+  for (const part of parts) {
+    if (part.type === "minusSign") {
+      sign = "negative";
+      break;
+    }
+    if (part.type === "plusSign") {
+      sign = "positive";
+      break;
+    }
+  }
+  return { label: parts.map((part) => part.value).join(""), sign };
+}
+
+// Label equals formatSignedCurrency(value).
+export function signedCurrencyLabel(value: number): SignedLabel {
+  return signedLabel(signedCurrency, value);
+}
+
+// Takes a ratio; label equals formatSignedPercent(ratio).
+export function signedPercentLabel(ratio: number): SignedLabel {
+  return signedLabel(signedPercent, ratio);
 }
