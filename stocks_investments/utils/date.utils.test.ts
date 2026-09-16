@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { addDays, dayIndex, isIsoDate, isoDateFromDayIndex, todayIsoInTimeZone, weekdayOf } from "./date.utils";
+import {
+  addDays,
+  dayIndex,
+  isIsoDate,
+  isoDateFromDayIndex,
+  isoYearEnd,
+  isoYearStart,
+  todayIsoInTimeZone,
+  weekdayOf,
+  yearOfIsoDate,
+} from "./date.utils";
 
 describe("day arithmetic", () => {
   it("dayIndex counts days since 1970-01-01", () => {
@@ -25,6 +35,38 @@ describe("day arithmetic", () => {
     expect(weekdayOf("2025-09-07")).toBe(0);
     expect(weekdayOf("2025-09-08")).toBe(1);
     expect(weekdayOf("2025-09-13")).toBe(6);
+  });
+});
+
+describe("year boundaries", () => {
+  it("reads the year of an ISO date", () => {
+    expect(yearOfIsoDate("2025-12-31")).toBe(2025);
+    expect(yearOfIsoDate("2026-01-01")).toBe(2026);
+  });
+
+  it("builds the first and last day of a year", () => {
+    expect(isoYearStart(2025)).toBe("2025-01-01");
+    expect(isoYearEnd(2025)).toBe("2025-12-31");
+  });
+
+  it("keeps four digits for a year below 1000", () => {
+    expect(isoYearStart(99)).toBe("0099-01-01");
+    expect(isoYearEnd(99)).toBe("0099-12-31");
+    expect(isIsoDate(isoYearEnd(99))).toBe(true);
+    expect(yearOfIsoDate(isoYearStart(99))).toBe(99);
+  });
+
+  it("round-trips through dayIndex", () => {
+    for (const year of [1970, 2023, 2024, 2025, 2026]) {
+      expect(isoDateFromDayIndex(dayIndex(isoYearStart(year)))).toBe(isoYearStart(year));
+      expect(addDays(isoYearEnd(year), 1)).toBe(isoYearStart(year + 1));
+      expect(yearOfIsoDate(isoYearEnd(year))).toBe(year);
+    }
+  });
+
+  it("measures 366 days in a leap year and 365 otherwise", () => {
+    expect(dayIndex(isoYearStart(2025)) - dayIndex(isoYearStart(2024))).toBe(366);
+    expect(dayIndex(isoYearStart(2026)) - dayIndex(isoYearStart(2025))).toBe(365);
   });
 });
 

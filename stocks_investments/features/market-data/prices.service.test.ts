@@ -1,7 +1,13 @@
 import { keepPreviousData } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PricesApiError } from "./prices.errors";
-import { currentPricesQueryOptions, fetchPrices, priceKeys } from "./prices.service";
+import {
+  currentPricesQueryOptions,
+  fetchPrices,
+  fetchYearEndPrices,
+  priceKeys,
+  yearEndPricesQueryOptions,
+} from "./prices.service";
 
 const okBody = { asOfDate: "2026-09-11", prices: { AAPL: 332.27 }, missing: ["ZZZZ"], fetchedAt: 1 };
 
@@ -97,5 +103,59 @@ describe("currentPricesQueryOptions", () => {
     const queryFn = currentPricesQueryOptions(["AAPL"]).queryFn as unknown as (ctx: { signal: AbortSignal }) => Promise<unknown>;
     await queryFn({ signal: new AbortController().signal });
     expect(mock).toHaveBeenCalledWith("/api/prices?symbols=AAPL", { signal: undefined });
+  });
+});
+
+describe("fetchYearEndPrices", () => {
+  it("adds the year to the same prices endpoint", async () => {
+    const mock = stubFetch(json(200, { ...okBody, asOfDate: "2025-12-31" }));
+    await expect(fetchYearEndPrices(["AAPL", "MSFT"], 2025)).resolves.toMatchObject({ asOfDate: "2025-12-31" });
+    expect(mock).toHaveBeenCalledWith("/api/prices?symbols=AAPL,MSFT&year=2025", { signal: undefined });
+  });
+
+  it("maps the history-limit 404 to its own code", async () => {
+    stubFetch(json(404, { error: { code: "PRICE_HISTORY_UNAVAILABLE", message: "too old" } }));
+    const error = await fetchYearEndPrices(["AAPL"], 2021).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(PricesApiError);
+    expect(error).toMatchObject({ code: "PRICE_HISTORY_UNAVAILABLE", status: 404, message: "too old" });
+  });
+
+  it("maps a rejected year to INVALID_YEAR", async () => {
+    stubFetch(json(400, { error: { code: "INVALID_YEAR", message: "Year must be four digits" } }));
+    await expect(fetchYearEndPrices(["AAPL"], 2026)).rejects.toMatchObject({ code: "INVALID_YEAR", status: 400 });
+  });
+});
+
+describe("yearEndPricesQueryOptions", () => {
+  it("uses one cache key per year regardless of symbol order or duplicates", () => {
+    expect(yearEndPricesQueryOptions(2025, ["MSFT", "AAPL", "MSFT"]).queryKey).toEqual([
+      "prices",
+      "year-end",
+      2025,
+      ["AAPL", "MSFT"],
+    ]);
+    expect(yearEndPricesQueryOptions(2025, ["AAPL"]).queryKey).not.toEqual(
+      yearEndPricesQueryOptions(2024, ["AAPL"]).queryKey,
+    );
+  });
+
+  it("never expires a published close, keeps it for a day and never reuses another year's data", () => {
+    const options = yearEndPricesQueryOptions(2025, []);
+    expect(options).toMatchObject({
+      enabled: false,
+      retry: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      staleTime: Infinity,
+      gcTime: 86_400_000,
+    });
+    expect(options).not.toHaveProperty("placeholderData");
+  });
+
+  it("does not hand the query's AbortSignal to fetch", async () => {
+    const mock = stubFetch(json(200, { ...okBody, asOfDate: "2025-12-31" }));
+    const queryFn = yearEndPricesQueryOptions(2025, ["AAPL"]).queryFn as unknown as (ctx: { signal: AbortSignal }) => Promise<unknown>;
+    await queryFn({ signal: new AbortController().signal });
+    expect(mock).toHaveBeenCalledWith("/api/prices?symbols=AAPL&year=2025", { signal: undefined });
   });
 });

@@ -15,6 +15,8 @@ import {
   findRemovalOversell,
   findUpdateOversell,
   isOpenPosition,
+  openTickersAt,
+  positionsAt,
   sellCostBasis,
   tryBuildPositions,
   validateSellSequence,
@@ -243,6 +245,103 @@ describe("buildPositions with SELL (average cost)", () => {
     expect(() => buildPositions([tx("BUY", "MSFT", 5, 100), tx("SELL", "AAPL", 1, 100)])).toThrow(
       OversellError,
     );
+  });
+});
+
+describe("positionsAt", () => {
+  const tx = makeFactory();
+  const history = [
+    tx("BUY", "AAPL", 10, 100, "2025-01-02"),
+    tx("SELL", "AAPL", 4, 130, "2025-06-01"),
+    tx("BUY", "MSFT", 5, 300, "2025-09-01"),
+  ];
+
+  it("has no position before the first trade", () => {
+    expect(positionsAt(history, "2025-01-01")).toEqual([]);
+  });
+
+  it("includes the trades dated on the date itself", () => {
+    expect(positionsAt(history, "2025-06-01")).toEqual([
+      { ticker: "AAPL", shares: 6, costBasis: 600, realizedGain: 120 },
+    ]);
+  });
+
+  it("excludes later trades", () => {
+    expect(positionsAt(history, "2025-05-31")).toEqual([
+      { ticker: "AAPL", shares: 10, costBasis: 1000, realizedGain: 0 },
+    ]);
+    expect(positionsAt(history, "2025-12-31")).toEqual([
+      { ticker: "AAPL", shares: 6, costBasis: 600, realizedGain: 120 },
+      { ticker: "MSFT", shares: 5, costBasis: 1500, realizedGain: 0 },
+    ]);
+  });
+
+  it("keeps tickers that prefix each other apart", () => {
+    const prefix = makeFactory();
+    const positions = positionsAt(
+      [
+        prefix("BUY", "F", 10, 12, "2025-01-09"),
+        prefix("BUY", "FB", 1, 300, "2025-01-10"),
+        prefix("BUY", "BRK.B", 2, 400, "2025-01-07"),
+        prefix("BUY", "BRKB", 1, 50, "2025-01-08"),
+        prefix("SELL", "F", 4, 15, "2025-02-13"),
+      ],
+      "2025-01-31",
+    );
+    expect(positions).toEqual([
+      { ticker: "BRK.B", shares: 2, costBasis: 800, realizedGain: 0 },
+      { ticker: "BRKB", shares: 1, costBasis: 50, realizedGain: 0 },
+      { ticker: "F", shares: 10, costBasis: 120, realizedGain: 0 },
+      { ticker: "FB", shares: 1, costBasis: 300, realizedGain: 0 },
+    ]);
+  });
+
+  it("settles each portfolio's dust before combining, like the full replay", () => {
+    const dust = makeFactory();
+    expect(
+      positionsAt(
+        [
+          dust("BUY", "AAPL", 6e-10, 100, "2025-01-02", PORTFOLIO),
+          dust("BUY", "AAPL", 6e-10, 100, "2025-01-02", OTHER_PORTFOLIO),
+        ],
+        "2025-06-01",
+      ),
+    ).toEqual([{ ticker: "AAPL", shares: 0, costBasis: 0, realizedGain: 0 }]);
+  });
+
+  it("never throws on a prefix of a valid history", () => {
+    const valid = makeFactory();
+    const transactions = [
+      valid("BUY", "AAPL", 10, 100, "2025-01-02", PORTFOLIO),
+      valid("SELL", "AAPL", 10, 130, "2025-03-01", PORTFOLIO),
+      valid("BUY", "AAPL", 2, 150, "2025-04-01", OTHER_PORTFOLIO),
+      valid("SELL", "AAPL", 2, 160, "2025-05-01", OTHER_PORTFOLIO),
+    ];
+    expect(validateSellSequence(transactions)).toEqual({ ok: true });
+    for (const date of ["2024-12-31", "2025-01-02", "2025-02-15", "2025-03-01", "2025-04-30", "2025-05-01", "2025-12-31"]) {
+      expect(() => positionsAt(transactions, date)).not.toThrow();
+    }
+  });
+});
+
+describe("openTickersAt", () => {
+  const tx = makeFactory();
+  const history = [
+    tx("BUY", "MSFT", 5, 300, "2025-01-02"),
+    tx("BUY", "AAPL", 10, 100, "2025-01-03"),
+    tx("SELL", "MSFT", 5, 320, "2025-02-01"),
+  ];
+
+  it("lists the tickers still held, A→Z", () => {
+    expect(openTickersAt(history, "2025-01-03")).toEqual(["AAPL", "MSFT"]);
+  });
+
+  it("drops a position closed on or before the date", () => {
+    expect(openTickersAt(history, "2025-02-01")).toEqual(["AAPL"]);
+  });
+
+  it("is empty when nothing was held yet", () => {
+    expect(openTickersAt(history, "2024-12-31")).toEqual([]);
   });
 });
 

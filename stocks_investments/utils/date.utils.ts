@@ -42,6 +42,23 @@ export function weekdayOf(isoDate: string): number {
   return new Date(dayIndex(isoDate) * MS_PER_DAY).getUTCDay();
 }
 
+export function yearOfIsoDate(isoDate: string): number {
+  return Number(isoDate.slice(0, 4));
+}
+
+// Years below 1000 keep the four digits an ISO date needs.
+function isoYear(year: number): string {
+  return String(year).padStart(4, "0");
+}
+
+export function isoYearStart(year: number): string {
+  return `${isoYear(year)}-01-01`;
+}
+
+export function isoYearEnd(year: number): string {
+  return `${isoYear(year)}-12-31`;
+}
+
 export function todayIsoInTimeZone(timeZone: string, now: number): string {
   // en-CA formats dates as YYYY-MM-DD.
   return new Intl.DateTimeFormat("en-CA", {

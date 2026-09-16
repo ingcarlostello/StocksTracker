@@ -13,6 +13,7 @@ import {
   summarizePortfolio,
   totalInvested,
   totalShares,
+  valuePositions,
 } from "./portfolio.service";
 
 const aapl: Position = { ticker: "AAPL", shares: 2, costBasis: 300, realizedGain: 0 };
@@ -143,6 +144,36 @@ describe("summarizePortfolio", () => {
       totalGainLoss: 0,
       portfolioReturn: null,
       missingPriceTickers: [],
+    });
+  });
+});
+
+describe("valuePositions", () => {
+  const positions: Position[] = [aapl, { ticker: "MSFT", shares: 3, costBasis: 180, realizedGain: 0 }];
+
+  it("adds up the priced positions", () => {
+    expect(valuePositions(positions, { AAPL: 200, MSFT: 50 })).toEqual({
+      value: 550,
+      missingTickers: [],
+    });
+  });
+
+  it("withholds the whole value and names the tickers without a close", () => {
+    expect(valuePositions(positions, { AAPL: 200 })).toEqual({
+      value: null,
+      missingTickers: ["MSFT"],
+    });
+  });
+
+  it("is worth zero without positions", () => {
+    expect(valuePositions([], { AAPL: 200 })).toEqual({ value: 0, missingTickers: [] });
+  });
+
+  it("ignores a closed position, priced or not", () => {
+    const closed: Position = { ticker: "TSLA", shares: 0, costBasis: 0, realizedGain: 50 };
+    expect(valuePositions([aapl, closed], { AAPL: 200 })).toEqual({
+      value: 400,
+      missingTickers: [],
     });
   });
 });

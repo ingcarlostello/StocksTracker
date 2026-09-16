@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useMountedRef } from "@/hooks/use-mounted-ref.hook";
+import { marketToday } from "@/domain/market-data/trading-date.service";
 import { findCandidateOversell } from "@/domain/portfolio/position.service";
 import { ALL_PORTFOLIOS_SCOPE } from "@/features/portfolio/active-portfolio.constants";
 import type { PortfolioOption } from "@/features/portfolio/portfolio-selection.type";
@@ -8,7 +9,7 @@ import type { TransactionFormValues, TransactionMutationError } from "../transac
 import { buildTransactionInput, fieldErrorsFromIssues } from "../transaction-form.utils";
 import { describeOversell } from "../transaction-oversell-message.utils";
 import type { OversellContext } from "../transaction-oversell.type";
-import { marketToday, useTransactionFormFields } from "./use-transaction-form-fields.hook";
+import { useTransactionFormFields } from "./use-transaction-form-fields.hook";
 import { useTransactionMutations } from "./use-transaction-mutations.hook";
 import { useTransactions } from "./use-transactions.hook";
 

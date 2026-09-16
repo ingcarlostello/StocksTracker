@@ -24,6 +24,13 @@ function toErrorResponse(error: unknown): Response {
       const detail = error.invalidSymbols.length > 0 ? `: ${error.invalidSymbols.join(", ")}` : "";
       return errorResponse(400, "INVALID_SYMBOLS", `${error.message}${detail}`);
     }
+    if (error.code === "INVALID_YEAR") {
+      return errorResponse(400, "INVALID_YEAR", error.message);
+    }
+    // Permanent on this plan, so it must read as an explanation, not as a retryable failure.
+    if (error.code === "HISTORY_UNAVAILABLE") {
+      return errorResponse(404, "PRICE_HISTORY_UNAVAILABLE", error.message);
+    }
     return errorResponse(503, "PRICES_UNAVAILABLE", error.message);
   }
   if (error instanceof MarketDataError && error.code === "RATE_LIMITED") {
@@ -47,8 +54,12 @@ export async function GET(request: NextRequest) {
   const symbols = (request.nextUrl.searchParams.get("symbols") ?? "")
     .split(",")
     .filter((symbol) => symbol.trim().length > 0);
+  const yearParam = request.nextUrl.searchParams.get("year");
   try {
-    const prices = await getMarketDataService().getCurrentPrices(symbols);
+    const prices =
+      yearParam === null
+        ? await getMarketDataService().getCurrentPrices(symbols)
+        : await getMarketDataService().getYearEndPrices(symbols, yearParam);
     return Response.json(prices, { headers: NO_STORE });
   } catch (error) {
     return toErrorResponse(error);
