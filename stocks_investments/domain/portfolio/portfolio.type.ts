@@ -38,6 +38,10 @@ export type PortfolioSummary = {
   missingPriceTickers: string[];
 };
 
+// Value of a set of positions at one date's closes; `value` is null while any ticker has no close,
+// so a partial valuation is never presented as a total.
+export type PositionsValuation = { value: number | null; missingTickers: string[] };
+
 // A named group of transactions ("Retiro", "Viajes"); positions are never shared between portfolios.
 // Generic id keeps the storage id type (e.g. a Convex Id) without importing it here.
 export type PortfolioLike<TId extends string = string> = {

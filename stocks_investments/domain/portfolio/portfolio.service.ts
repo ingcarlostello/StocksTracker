@@ -1,5 +1,11 @@
 import { isOpenPosition } from "./position.service";
-import type { Holding, PortfolioSummary, Position, PriceMap } from "./portfolio.type";
+import type {
+  Holding,
+  PortfolioSummary,
+  Position,
+  PositionsValuation,
+  PriceMap,
+} from "./portfolio.type";
 
 function openAverageCost(position: Position): number {
   return position.costBasis / position.shares;
@@ -80,4 +86,11 @@ export function summarizePortfolio(holdings: readonly Holding[]): PortfolioSumma
     portfolioReturn: invested > 0 ? gain / invested : null,
     missingPriceTickers,
   };
+}
+
+// Value of positions at one set of closes, so the "one missing price withholds the whole total" rule
+// lives only in summarizePortfolio. Closed positions contribute nothing; no positions is a value of 0.
+export function valuePositions(positions: readonly Position[], prices: PriceMap): PositionsValuation {
+  const summary = summarizePortfolio(buildHoldings(positions, prices));
+  return { value: summary.portfolioValue, missingTickers: summary.missingPriceTickers };
 }

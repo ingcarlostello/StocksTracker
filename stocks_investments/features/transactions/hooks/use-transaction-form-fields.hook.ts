@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
-import { MARKET_TIME_ZONE } from "@/domain/transactions/transaction.constants";
 import type { TransactionType } from "@/domain/transactions/transaction.type";
 import type { PortfolioOption } from "@/features/portfolio/portfolio-selection.type";
-import { todayIsoInTimeZone } from "@/utils/date.utils";
 import type {
   PositionSizeField,
   TransactionFieldErrors,
@@ -17,11 +15,6 @@ type UseTransactionFormFieldsOptions = {
   initialValues: () => TransactionFormValues;
   portfolios: readonly PortfolioOption[];
 };
-
-// Today's date in New York, as the server validates it. Reads the clock, so the pure form utils do not.
-export function marketToday(): string {
-  return todayIsoInTimeZone(MARKET_TIME_ZONE, Date.now());
-}
 
 function withoutFields(errors: TransactionFieldErrors, fields: readonly TransactionFormField[]): TransactionFieldErrors {
   if (!fields.some((field) => field in errors)) return errors;

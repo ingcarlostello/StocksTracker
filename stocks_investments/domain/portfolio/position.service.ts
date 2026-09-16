@@ -137,6 +137,20 @@ export function buildPositions(transactions: readonly TransactionLike[]): Positi
   return combinePositions([...positions.values()].map(settleClosedPosition));
 }
 
+// Positions as of the end of `date`, inclusive: the same replay as buildPositions over the history prefix,
+// so settle and combine semantics are identical. A prefix of a valid history never throws, because a
+// violating SELL would throw at the same step of the full replay.
+export function positionsAt(transactions: readonly TransactionLike[], date: string): Position[] {
+  return buildPositions(transactions.filter((transaction) => transaction.date <= date));
+}
+
+// Tickers still held at `date`, A→Z (buildPositions already sorts by ticker).
+export function openTickersAt(transactions: readonly TransactionLike[], date: string): string[] {
+  return positionsAt(transactions, date)
+    .filter(isOpenPosition)
+    .map((position) => position.ticker);
+}
+
 // Non-throwing replay for callers that must render an invalid history instead of crashing.
 export function tryBuildPositions(transactions: readonly TransactionLike[]): PositionsResult {
   try {

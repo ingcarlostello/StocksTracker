@@ -1,4 +1,8 @@
-export type PricesRequestErrorCode = "INVALID_SYMBOLS" | "NO_DATA";
+export type PricesRequestErrorCode =
+  | "INVALID_SYMBOLS"
+  | "INVALID_YEAR"
+  | "NO_DATA"
+  | "HISTORY_UNAVAILABLE";
 
 export class PricesRequestError extends Error {
   readonly code: PricesRequestErrorCode;

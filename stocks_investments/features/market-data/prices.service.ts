@@ -3,7 +3,11 @@ import { API_ENDPOINTS, API_ERROR_CODES } from "@/constants/api.constants";
 import type { ApiErrorResponse } from "@/types/api-error.type";
 import type { PricesResponse } from "@/types/prices-response.type";
 import { isRecord } from "@/utils/type-guard.utils";
-import { PRICES_STALE_TIME_MS } from "./prices.constants";
+import {
+  PRICES_STALE_TIME_MS,
+  YEAR_END_PRICES_GC_TIME_MS,
+  YEAR_END_PRICES_STALE_TIME_MS,
+} from "./prices.constants";
 import { PricesApiError } from "./prices.errors";
 
 function isPricesResponse(body: unknown): body is PricesResponse {
@@ -40,9 +44,11 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-export async function fetchPrices(symbols: readonly string[], signal?: AbortSignal): Promise<PricesResponse> {
-  const url = `${API_ENDPOINTS.PRICES}?symbols=${symbols.map(encodeURIComponent).join(",")}`;
+function symbolsParam(symbols: readonly string[]): string {
+  return `symbols=${symbols.map(encodeURIComponent).join(",")}`;
+}
 
+async function requestPrices(url: string, signal?: AbortSignal): Promise<PricesResponse> {
   let response: Response;
   try {
     response = await fetch(url, { signal });
@@ -69,6 +75,18 @@ export async function fetchPrices(symbols: readonly string[], signal?: AbortSign
   return body;
 }
 
+export async function fetchPrices(symbols: readonly string[], signal?: AbortSignal): Promise<PricesResponse> {
+  return requestPrices(`${API_ENDPOINTS.PRICES}?${symbolsParam(symbols)}`, signal);
+}
+
+export async function fetchYearEndPrices(
+  symbols: readonly string[],
+  year: number,
+  signal?: AbortSignal,
+): Promise<PricesResponse> {
+  return requestPrices(`${API_ENDPOINTS.PRICES}?${symbolsParam(symbols)}&year=${year}`, signal);
+}
+
 function normalizeKeySymbols(symbols: readonly string[]): string[] {
   return [...new Set(symbols)].sort();
 }
@@ -76,6 +94,8 @@ function normalizeKeySymbols(symbols: readonly string[]): string[] {
 export const priceKeys = {
   all: ["prices"] as const,
   current: (symbols: readonly string[]) => [...priceKeys.all, "current", normalizeKeySymbols(symbols)] as const,
+  yearEnd: (year: number, symbols: readonly string[]) =>
+    [...priceKeys.all, "year-end", year, normalizeKeySymbols(symbols)] as const,
 };
 
 // Single cache contract for current prices: every caller shares this key and these options.
@@ -91,6 +111,25 @@ export function currentPricesQueryOptions(symbols: readonly string[]) {
     placeholderData: keepPreviousData,
     staleTime: PRICES_STALE_TIME_MS,
     // Retries would spend the provider's 5 requests/minute on failures.
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: true,
+  });
+}
+
+// Closes of a finished year: immutable once published, so they are never stale and are kept for a day.
+export function yearEndPricesQueryOptions(year: number, symbols: readonly string[]) {
+  const keySymbols = normalizeKeySymbols(symbols);
+  return queryOptions({
+    queryKey: priceKeys.yearEnd(year, keySymbols),
+    // No AbortSignal, for the same reason as currentPricesQueryOptions.
+    queryFn: () => fetchYearEndPrices(keySymbols, year),
+    enabled: keySymbols.length > 0,
+    // No placeholderData: another year's closes must never stand in for this one.
+    staleTime: YEAR_END_PRICES_STALE_TIME_MS,
+    // Without this, a short detour to another year would re-request closes that can never change.
+    gcTime: YEAR_END_PRICES_GC_TIME_MS,
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,

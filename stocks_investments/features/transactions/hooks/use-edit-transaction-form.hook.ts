@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useMountedRef } from "@/hooks/use-mounted-ref.hook";
 import type { Id } from "@/convex/_generated/dataModel";
+import { marketToday } from "@/domain/market-data/trading-date.service";
 import { findUpdateOversell } from "@/domain/portfolio/position.service";
 import type { TransactionLike } from "@/domain/transactions/transaction.type";
 import { isSameTransactionInput } from "@/domain/transactions/transaction.utils";
@@ -11,7 +12,7 @@ import { editFormValuesFromTransaction, editNotice, movedOutOfScopeHint } from "
 import { TRANSACTION_ERROR_MESSAGES } from "../transaction-messages.constants";
 import { describeOversell } from "../transaction-oversell-message.utils";
 import type { OversellContext } from "../transaction-oversell.type";
-import { marketToday, useTransactionFormFields } from "./use-transaction-form-fields.hook";
+import { useTransactionFormFields } from "./use-transaction-form-fields.hook";
 import { useTransactionMutations } from "./use-transaction-mutations.hook";
 
 type StoredTransaction = TransactionLike<Id<"transactions">>;
